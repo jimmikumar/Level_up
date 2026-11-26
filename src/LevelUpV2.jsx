@@ -192,8 +192,15 @@ export default function LevelUpV2() {
       if (action.type === "add_habit" && action.title) return { ...d, habits: [...d.habits, { id: makeId(), title: action.title, category: action.category || "Personal", done: false }] };
       if (action.type === "add_task" && action.title) return { ...d, tasks: [...d.tasks, { id: makeId(), title: action.title, done: false }] };
       if (action.type === "add_goal" && action.title) return { ...d, goals: [...d.goals, { id: makeId(), title: action.title, category: action.category || "Personal", progress: 0 }] };
-      if (action.type === "complete_habit") return { ...d, habits: d.habits.map(h => h.id === action.id ? { ...h, done: true } : h), xp: d.xp + 10 };
-      if (action.type === "update_goal") return { ...d, goals: d.goals.map(g => g.id === action.id ? { ...g, progress: Math.max(0, Math.min(100, Number(action.progress) || 0)) } : g) };
+      if (action.type === "complete_habit") {
+        const habit = d.habits.find(h => h.id === action.id);
+        if (!habit || habit.done) return d;
+        return { ...d, habits: d.habits.map(h => h.id === action.id ? { ...h, done: true } : h), xp: d.xp + 10 };
+      }
+      if (action.type === "update_goal") {
+        if (!d.goals.some(g => g.id === action.id)) return d;
+        return { ...d, goals: d.goals.map(g => g.id === action.id ? { ...g, progress: Math.max(0, Math.min(100, Number(action.progress) || 0)) } : g) };
+      }
       return d;
     });
   }
