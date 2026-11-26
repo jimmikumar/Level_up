@@ -40,3 +40,4 @@ This version stores data in the current browser only. It does not yet sync betwe
 ## Zero-cost-first deployment
 
 See [NO_SURPRISE_BILLING.md](./NO_SURPRISE_BILLING.md) for the static hosting setup and steps to avoid enabling paid services. This version uses no paid backend or external API.
+Cloud sync configuration updated. 
