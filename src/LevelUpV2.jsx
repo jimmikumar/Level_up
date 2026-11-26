@@ -50,6 +50,58 @@ export default function LevelUpV2() {
   const aiEndpoint = import.meta.env.VITE_AI_ASSISTANT_URL || "";
 
   useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(({ data: result }) => {
+      if (active) { setSession(result?.session || null); setAuthLoading(false); }
+    }).catch(() => { if (active) setAuthLoading(false); });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthLoading(false);
+    });
+    return () => { active = false; subscription.unsubscribe(); };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadCloud() {
+      if (!session?.user?.id) { setLoadedUserId(null); setSyncStatus("Not signed in"); return; }
+      const userId = session.user.id;
+      setLoadedUserId(null);
+      setSyncStatus("Loading cloud progress...");
+      const { data: row, error } = await supabase.from("user_progress_v2").select("progress").eq("userid", userId).maybeSingle();
+      if (!active) return;
+      if (error) {
+        setSyncStatus("Local backup active");
+        setNotice("Cloud sync is not ready yet. Run SUPABASE_V2_SETUP.sql. Your browser copy remains available.");
+        setLoadedUserId(userId);
+        return;
+      }
+      if (row?.progress && typeof row.progress === "object") {
+        setData({ ...loadData(), ...row.progress });
+        setReflection(row.progress.reflections?.[today()] || "");
+      }
+      setLoadedUserId(userId);
+      setSyncStatus("Cloud ready");
+    }
+    loadCloud();
+    return () => { active = false; };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!session?.user?.id || loadedUserId !== session.user.id) return;
+    const timer = window.setTimeout(async () => {
+      setSyncStatus("Saving...");
+      const { error } = await supabase.from("user_progress_v2").upsert({
+        userid: session.user.id,
+        progress: data,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "userid" });
+      setSyncStatus(error ? "Local backup active" : "Synced");
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [data, session?.user?.id, loadedUserId]);
+
+  useEffect(() => {
     const next = data.day === today() ? data : { ...data, day: today(), habits: data.habits.map(h => ({ ...h, done: false })) };
     if (next !== data) setData(next);
     localStorage.setItem(STORE, JSON.stringify(next));
@@ -186,6 +238,9 @@ export default function LevelUpV2() {
     const title = window.prompt("What task should be added?");
     if (title?.trim()) update(d => ({ ...d, tasks: [...d.tasks, { id: makeId(), title: title.trim(), done: false }] }));
   }
+
+  if (authLoading) return <div className="auth-loading">Loading LevelUp...</div>;
+  if (!session) return <Auth />;
 
   return (
     <div className="lv2-shell">
