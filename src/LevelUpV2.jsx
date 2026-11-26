@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "./supabase";
+import Auth from "./Auth";
 import { Activity, ArrowUpRight, AudioLines, Bot, Check, CheckCircle2, Circle, Command, Flame, Goal, Mic, MicOff, Plus, Send, Sparkles, Target, Trash2, Trophy, Volume2, VolumeX, WandSparkles, X, Zap } from "lucide-react";
 
 const STORE = "levelup-v2-data";
@@ -31,6 +33,10 @@ const makeId = () => Date.now() + Math.floor(Math.random() * 1000);
 
 export default function LevelUpV2() {
   const [data, setData] = useState(loadData);
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loadedUserId, setLoadedUserId] = useState(null);
+  const [syncStatus, setSyncStatus] = useState("Checking account...");
   const [tab, setTab] = useState("Today");
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([{ role: "assistant", content: "Hi! I can update your habits, goals and tasks. Try saying, “Add a habit to read for 20 minutes” or “Mark morning movement complete.”" }]);
@@ -192,7 +198,7 @@ export default function LevelUpV2() {
         <div className="lv2-side-foot"><div className="lv2-level"><span>YOUR LEVEL</span><b>LV {level}</b><div><i style={{ width: ((data.xp % 500) / 5) + "%" }} /></div><small>{data.xp % 500} / 500 XP</small></div><p>Private by default. Your V2 data is stored separately in this browser.</p></div>
       </aside>
       <main className="lv2-main">
-        <header className="lv2-header"><div><span className="lv2-kicker">YOUR PERSONAL OPERATING SYSTEM</span><h1>{tab === "Today" ? "Make today count." : tab}</h1><p>{dateLabel} · Small steps, tracked consistently.</p></div><button className="lv2-ai-shortcut" onClick={() => setTab("AI Assistant")}><Sparkles size={16} /> Ask LevelUp AI</button></header>
+        <header className="lv2-header"><div><span className="lv2-kicker">YOUR PERSONAL OPERATING SYSTEM</span><h1>{tab === "Today" ? "Make today count." : tab}</h1><p>{dateLabel} · Small steps, tracked consistently. · {syncStatus}</p></div><button className="lv2-ai-shortcut" onClick={() => setTab("AI Assistant")}><Sparkles size={16} /> Ask LevelUp AI</button></header>
         {notice && <div className="lv2-notice" onClick={() => setNotice("")}>{notice}<X size={14}/></div>}
         {tab === "Today" && <div className="lv2-content">
           <section className="lv2-hero"><div><span className="lv2-kicker">DAILY PROGRESS</span><div className="lv2-score">{percent}<small>%</small></div><h2>{completed === data.habits.length && data.habits.length ? "Everything checked off." : "Build momentum, one action at a time."}</h2><p>{completed} of {data.habits.length} habits completed today</p><div className="lv2-progress"><i style={{ width: percent + "%" }}/></div></div><div className="lv2-hero-orb"><Activity size={34}/></div></section>
