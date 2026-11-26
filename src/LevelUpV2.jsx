@@ -119,8 +119,23 @@ export default function LevelUpV2() {
   }, [data, session?.user?.id, loadedUserId]);
 
   useEffect(() => {
-    const next = data.day === today() ? data : { ...data, day: today(), habits: data.habits.map(h => ({ ...h, done: false })) };
-    if (next !== data) setData(next);
+    let next = data;
+    if (data.day !== today()) {
+      const completedYesterday = data.habits.filter(h => h.done).map(h => h.id);
+      next = {
+        ...data,
+        day: today(),
+        habits: data.habits.map(h => ({ ...h, done: false })),
+        habitLog: { ...(data.habitLog || {}), [data.day]: completedYesterday }
+      };
+      setData(next);
+    } else if (!Object.prototype.hasOwnProperty.call(data.habitLog || {}, today())) {
+      const completedToday = data.habits.filter(h => h.done).map(h => h.id);
+      if (completedToday.length) {
+        next = { ...data, habitLog: { ...(data.habitLog || {}), [today()]: completedToday } };
+        setData(next);
+      }
+    }
     localStorage.setItem(STORE, JSON.stringify(next));
   }, [data]);
 
@@ -294,7 +309,7 @@ export default function LevelUpV2() {
       <aside className="lv2-sidebar">
         <div className="lv2-brand"><span><Zap size={20} fill="currentColor" /></span>Level<span>Up</span><small>V2</small></div>
         <div className="lv2-nav-label">WORKSPACE</div>
-        {[["Today", Target], ["Habits", CheckCircle2], ["Goals", Goal], ["Tasks", Command], ["AI Assistant", Bot]].map(([name, Icon]) => (
+        {[["Today", Target], ["Habits", CheckCircle2], ["Goals", Goal], ["Tasks", Command], ["Calendar", CalendarDays], ["Analytics", BarChart3], ["AI Assistant", Bot]].map(([name, Icon]) => (
           <button key={name} className={"lv2-nav " + (tab === name ? "active" : "")} onClick={() => setTab(name)}><Icon size={17} />{name}{name === "Habits" && <small>{completed}/{data.habits.length}</small>}</button>
         ))}
         <div className="lv2-side-foot"><div className="lv2-level"><span>YOUR LEVEL</span><b>LV {level}</b><div><i style={{ width: ((data.xp % 500) / 5) + "%" }} /></div><small>{data.xp % 500} / 500 XP</small></div><p>Private by default. Your V2 data is stored separately in this browser.</p></div>
