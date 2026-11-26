@@ -37,7 +37,7 @@ export default {
     if (!message || message.length > 4000) return json({ error: "Message is required and must be under 4000 characters." }, 400);
 
     const baseUrl = (env.AI_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/$/, "");
-    const model = env.AI_MODEL || "llama-3.3-70b-versatile";
+    const model = env.AI_MODEL || "openai/gpt-oss-120b";
     const response = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
       headers: {
