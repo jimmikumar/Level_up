@@ -95,3 +95,7 @@ button,input,select,textarea{font:inherit}.sidebar{width:246px;background:var(--
   background: var(--bg);
   color: var(--text);
 }
+
+.auth-screen{--bg:#0b1020;--panel:#131b2d;--text:#edf1fb;--muted:#8d9ab2;--border:#26324a;color:var(--text)}
+.auth-card{color:var(--text)}
+.auth-card input{color:var(--text)}

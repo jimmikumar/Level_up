@@ -1,43 +1,65 @@
 # LevelUp
 
-A responsive personal routine and goal tracker built with React, Vite, Recharts and browser localStorage.
+LevelUp is a personal growth tracker with two selectable versions. It is built with React and Vite and can be hosted as a static site on Cloudflare Pages.
 
-## Features
-- Habit tracking across Health and fitness, Learning, Work and productivity, Business development, Personal development and My goals.
-- XP rewards, levels and a daily challenge.
-- Streak indicator, achievements and weekly consistency chart.
-- Long term goals for finance, startup, YouTube, LinkedIn and other areas.
-- Daily reflection note.
-- Dark and light themes.
-- Installable PWA shell with basic offline asset caching.
-- JSON backup export and restore from Settings.
-- Responsive layout for desktop and mobile.
-- Data is saved in the browser using localStorage.
+## Versions
+
+### V1
+The original tracker is preserved in `src/LevelUpV1.jsx`. It retains its existing habits, goals, XP, charts, backup tools, authentication and Supabase table integration.
+
+### V2
+V2 is a redesigned personal dashboard with:
+- Daily habit tracking and XP.
+- Long term goals with progress controls.
+- A task list.
+- Daily reflections.
+- Voice input through the browser Speech Recognition API.
+- Spoken assistant replies through browser text to speech.
+- A built in local command assistant for common habit, task and goal actions.
+- An optional AI endpoint that can connect to an OpenAI compatible provider through a Cloudflare Worker.
+- Separate Supabase storage in `user_progress_v2`, so V2 never overwrites V1 progress.
+- Local browser backup for V2.
+
+Use the V1 and V2 switch in the top right corner. The selected version is remembered on the device.
+
+## Data storage
+
+Both versions require a Supabase account login. V1 continues using its existing `user_progress` table. V2 uses a separate `user_progress_v2` table.
+
+To enable V2 cloud sync, open the Supabase SQL Editor and run [SUPABASE_V2_SETUP.sql](./SUPABASE_V2_SETUP.sql). V2 also keeps a local browser copy under `levelup-v2-data`. Local browser data is specific to that browser and device. Sign in and configure the V2 table to sync across devices.
+
+Set these build environment variables in Cloudflare Pages:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_AI_ASSISTANT_URL` (optional, the deployed Worker URL)
+
+Never put an AI provider secret key in a `VITE_` variable or browser code.
+
+## Optional AI assistant
+
+The local assistant works without an AI provider and can perform common commands. For open ended AI responses, deploy [workers/ai-coach.js](./workers/ai-coach.js) as a Cloudflare Worker.
+
+Set Worker variables:
+- `AI_BASE_URL`, for example `https://api.groq.com/openai/v1`
+- `AI_MODEL`, for example `llama-3.3-70b-versatile`
+
+Add `AI_API_KEY` as a Worker secret using the Cloudflare dashboard or Wrangler secret command. You can use another provider that supports the OpenAI chat completions API by changing the base URL, model and secret.
+
+Then set `VITE_AI_ASSISTANT_URL` to the Worker URL in Cloudflare Pages and redeploy the site. The provider key stays on the Worker.
 
 ## Run locally
+
 1. Install Node.js 18 or newer.
-2. Extract this project.
-3. Open a terminal in the project folder.
-4. Run `npm install`
-5. Run `npm run dev`
-6. Open the local URL printed by Vite.
+2. Run `npm install`.
+3. Create a `.env` file with the two Supabase variables and, optionally, the AI endpoint.
+4. Run `npm run dev`.
+5. Run `npm run build` to create the production build in `dist/`.
 
-## Build for deployment
-Run `npm run build`. The production site is generated in `dist/`. Deploy that folder or connect the repository to Vercel.
+## Deployment
 
-## Current MVP limitations
-This version stores data in the current browser only. It does not yet sync between devices or provide login, cloud backups, reminders or a server database. The weekly chart uses saved day completion markers. Detailed per habit history and automatic reminder notifications will be added in a later version.
+For Cloudflare Pages, connect this GitHub repository and use:
+- Build command: `npm run build`
+- Build output directory: `dist`
+- Root directory: `/`
 
-
-## Free deployment recommendation
-- Store source code in a GitHub repository.
-- Deploy the Vite `dist/` output to Cloudflare Pages Free.
-- Keep JSON backups in Google Drive manually, or add Google Drive OAuth integration later.
-- Cloud sync is intentionally not required in this local first architecture. Supabase can be added later as an optional sync provider.
-- AI features can be added through a Cloudflare Worker proxy to Groq. Never put a Groq API key in browser code.
-
-
-## Zero-cost-first deployment
-
-See [NO_SURPRISE_BILLING.md](./NO_SURPRISE_BILLING.md) for the static hosting setup and steps to avoid enabling paid services. This version uses no paid backend or external API.
-Cloud sync configuration updated. 
+The existing V1 service worker and PWA setup remain in place. Review `NO_SURPRISE_BILLING.md` before enabling any paid service.
