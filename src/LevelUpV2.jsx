@@ -301,6 +301,69 @@ export default function LevelUpV2() {
     if (title?.trim()) update(d => ({ ...d, tasks: [...d.tasks, { id: makeId(), title: title.trim(), done: false }] }));
   }
 
+  function setMood(mood) {
+    update(d => ({
+      ...d,
+      moods: { ...(d.moods || {}), [today()]: { ...(d.moods?.[today()] || {}), mood } }
+    }));
+  }
+
+  async function generateMotivation() {
+    if (motivationBusy) return;
+    setMotivationBusy(true);
+    setMotivation("");
+    const mood = data.moods?.[today()]?.mood || "Okay";
+    const note = moodNote.trim();
+    const hour = new Date().getHours();
+    const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    const fallback = {
+      Great: "You are feeling good today. Use that energy on one meaningful task, then give yourself credit for completing it.",
+      Good: "You do not need a perfect day. Keep your momentum by choosing one useful next step.",
+      Okay: "An ordinary day is still a chance to make progress. Start with something small and manageable.",
+      Low: "Be kind to yourself today. Lower the pressure, choose one gentle task, and count showing up as progress.",
+      Stressed: "Pause for a moment. You do not have to solve everything at once. Pick the next controllable step and leave the rest for later."
+    };
+    try {
+      if (aiEndpoint) {
+        const response = await fetch(aiEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: "Give me a short, supportive and practical motivational message for today. Match my mood and avoid pressure. Mood: " + mood + ". Time of day: " + timeOfDay + ". Note: " + (note || "No additional note."),
+            context: { habits: data.habits, goals: data.goals, tasks: data.tasks, xp: data.xp, today: today(), purpose: "mood based encouragement" }
+          })
+        });
+        if (!response.ok) throw new Error("AI service returned " + response.status);
+        const result = await response.json();
+        setMotivation(result.reply || result.message || fallback[mood]);
+      } else {
+        setMotivation(fallback[mood] || fallback.Okay);
+      }
+    } catch (error) {
+      setMotivation((fallback[mood] || fallback.Okay) + " (Your personal encouragement is available even when AI is offline.)");
+    } finally {
+      setMotivationBusy(false);
+    }
+  }
+
+  function addCalendarPlan(event) {
+    event?.preventDefault();
+    const title = planTitle.trim();
+    if (!title) return;
+    update(d => ({
+      ...d,
+      calendarItems: [...(d.calendarItems || []), { id: makeId(), title, type: planType, date: selectedDate, done: false }]
+    }));
+    setPlanTitle("");
+  }
+
+  function toggleCalendarPlan(id) {
+    update(d => ({
+      ...d,
+      calendarItems: (d.calendarItems || []).map(item => item.id === id ? { ...item, done: !item.done } : item)
+    }));
+  }
+
   if (authLoading) return <div className="auth-loading">Loading LevelUp...</div>;
   if (!session) return <Auth />;
 
