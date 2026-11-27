@@ -210,7 +210,6 @@ export default function LevelUpV3_2() {
   const [reviewBusy, setReviewBusy] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chat, setChat] = useState(() => readLocal().coachConversation?.length ? readLocal().coachConversation : [{ role: "assistant", text: "I can help you plan your day, prioritise tasks, break goals into milestones and review your progress. What would you like to work on?" }]);
-  const [weeklyReportBusy, setWeeklyReportBusy] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [focusTask, setFocusTask] = useState("");
@@ -517,7 +516,7 @@ export default function LevelUpV3_2() {
     } finally { setReviewBusy(false); }
   }
 
-  function applyAction(action) {
+  function applyAction(action, confirmed = false) {
     if (!action || typeof action !== "object") return;
     if (action.type === "add_task" && action.title) {
       update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), title: action.title, priority: action.priority && ["P1","P2","P3","P4"].includes(action.priority) ? action.priority : "P2", dueDate: action.dueDate || "", scheduledDate: action.scheduledDate || "", scheduledTime: action.scheduledTime || "", goalId: null, estimate: Number(action.estimate) || 30, status: "todo" }] }));
@@ -531,11 +530,11 @@ export default function LevelUpV3_2() {
       update(d => ({ ...d, tasks: d.tasks.map(t => t.id === action.id ? { ...t, ...(action.title ? { title: action.title } : {}), ...(action.priority && ["P1","P2","P3","P4"].includes(action.priority) ? { priority: action.priority } : {}), ...(action.scheduledDate ? { scheduledDate: action.scheduledDate } : {}), ...(action.scheduledTime ? { scheduledTime: action.scheduledTime } : {}) } : t) }));
     } else if (action.type === "delete_task" && action.id) {
       const target = data.tasks.find(t => String(t.id) === String(action.id));
-      if (!target || !window.confirm("Delete the task \"" + target.title + "\"? This cannot be undone.")) return;
+      if (!target || (!confirmed && !window.confirm("Delete the task \"" + target.title + "\"? This cannot be undone."))) return;
       update(d => ({ ...d, tasks: d.tasks.filter(t => String(t.id) !== String(action.id)) }));
     } else if (action.type === "reschedule_task" && action.id && action.scheduledDate) {
       const target = data.tasks.find(t => String(t.id) === String(action.id));
-      if (!target || !window.confirm("Move \"" + target.title + "\" to " + action.scheduledDate + (action.scheduledTime ? " at " + action.scheduledTime : "") + "?")) return;
+      if (!target || (!confirmed && !window.confirm("Move \"" + target.title + "\" to " + action.scheduledDate + (action.scheduledTime ? " at " + action.scheduledTime : "") + "?"))) return;
       update(d => ({ ...d, tasks: d.tasks.map(t => String(t.id) === String(action.id) ? { ...t, scheduledDate: action.scheduledDate, scheduledTime: action.scheduledTime || t.scheduledTime } : t) }));
     } else if (action.type === "update_goal") {
       update(d => ({ ...d, goals: d.goals.map(g => g.id === action.id ? { ...g, progress: Math.max(0, Math.min(100, Number(action.progress) || 0)) } : g) }));
@@ -554,7 +553,7 @@ export default function LevelUpV3_2() {
         const actions = result.actions.filter(action => action && typeof action === "object");
         const destructive = actions.some(action => ["delete_task", "reschedule_task"].includes(action.type));
         const summary = actions.map(action => action.type.replaceAll("_", " ")).join(", ");
-        if (!destructive || window.confirm("The AI wants to make these changes: " + summary + ". Continue?")) actions.forEach(applyAction);
+        if (!destructive || window.confirm("The AI wants to make these changes: " + summary + ". Continue?")) actions.forEach(action => applyAction(action, true));
       } else if (result.action) applyAction(result.action);
       setChat(items => [...items, { role: "assistant", text: result.reply || "I have processed that request." }]);
     } catch (error) {
