@@ -55,9 +55,9 @@ const safeText = value => String(value || "").trim();
 function parsePlanTasks(text) {
   const results = [];
   let section = "";
-  const clean = value => String(value || "").replace(/\\\\([-*+])/g, "$1").replace(/\\*\\*/g, "").replace(/&nbsp;/g, " ").replace(/\\s+/g, " ").trim();
+  const clean = value => String(value || "").replace(/\\([-*+])/g, "$1").replace(/\*\*/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
   const toTime = value => {
-    const match = String(value || "").match(/^(\\d{1,2}):(\\d{2})\\s*(AM|PM)?$/i);
+    const match = String(value || "").match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
     if (!match) return "";
     let hour = Number(match[1]);
     const minute = Number(match[2]);
@@ -73,30 +73,31 @@ function parsePlanTasks(text) {
       results.push({ title: name, priority: details.priority || "P2", estimate: details.estimate || 30, scheduledTime: details.scheduledTime || "", scheduledDate: details.scheduledTime ? today() : "" });
     }
   };
-  String(text || "").split(/\\r?\\n/).forEach(raw => {
+  String(text || "").split(/\r?\n/).forEach(raw => {
     const line = clean(raw);
     if (!line) return;
-    const heading = line.replace(/^#+\\s*/, "").replace(/[*_]/g, "").replace(/:$/, "").toLowerCase();
+    const heading = line.replace(/^#+\s*/, "").replace(/[*_]/g, "").replace(/:$/, "").toLowerCase();
     if (/^(main outcomes|key outcomes|outcomes)$/.test(heading)) { section = "outcomes"; return; }
     if (/^(immediate action|first action|start here)$/.test(heading)) { section = "immediate"; return; }
     if (/(schedule|time.blocked|time blocked)/.test(heading)) { section = "schedule"; return; }
     if (/^(breaks|notes|stay flexible|tips)$/.test(heading)) { section = "ignore"; return; }
-    const time = line.match(/(\\d{1,2}:\\d{2}\\s*(?:AM|PM)?)\\s*[‐‑‒–—-]\\s*(\\d{1,2}:\\d{2}\\s*(?:AM|PM)?)/i);
+    const time = line.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)\s*[‐‑‒–—-]\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i);
     if (time) {
       const rangeEnd = time.index + time[0].length;
-      let rest = line.slice(rangeEnd).replace(/^\\s*[|:–—-]?\\s*/, "");
-      const pipeParts = rest.split(/\\s*\\|\\s*/);
-      let priority = (rest.match(/\\bP([1-4])\\b/i) || [])[0];
-      let estimateMatch = rest.match(/\\((\\d{1,3})\\s*(?:min|minutes?)\\)/i) || rest.match(/\\b(\\d{1,3})\\s*(?:min|minutes?)\\b/i);
-      let title = pipeParts.length >= 3 ? pipeParts.slice(3).join(" ") : rest;
+      let rest = line.slice(rangeEnd).replace(/^\s*[|:–—-]?\s*/, "");
+      const pipeParts = rest.split(/\s*\|\s*/);
+      let priority = (rest.match(/\bP([1-4])\b/i) || [])[0];
+      let estimateMatch = rest.match(/\((\d{1,3})\s*(?:min|minutes?)\)/i) || rest.match(/\b(\d{1,3})\s*(?:min|minutes?)\b/i);
+      if (/^(?:break|short break|wrap[- ]?up|light warm[- ]?up|warm[- ]?up|review progress)/i.test(rest)) return;
+      let title = pipeParts.length >= 3 ? pipeParts.slice(2).join(" ") : rest;
       if (pipeParts.length >= 3) {
-        estimateMatch = estimateMatch || pipeParts[0].match(/(\\d{1,3})/);
+        estimateMatch = estimateMatch || pipeParts[0].match(/(\d{1,3})/);
         priority = priority || pipeParts[1];
       }
-      title = title.replace(/^\\(?\\d{1,3}\\s*(?:min|minutes?)\\)?\\s*[:|–—-]?\\s*/i, "");
-      title = title.replace(/^P[1-4]\\s*[:|,]?\\s*/i, "");
-      title = title.replace(/^(?:warm[- ]?up|focus session \\d+|deep work|work block|session \\d+)\\s*[:|,–—-]+\\s*/i, "");
-      title = title.replace(/\\s*\\((?:goal|outcome)\\s*\\d+\\)\\s*$/i, "");
+      title = title.replace(/^\(?\d{1,3}\s*(?:min|minutes?)\)?\s*[:|–—-]?\s*/i, "");
+      title = title.replace(/^P[1-4]\s*[:|,]?\s*/i, "");
+      title = title.replace(/^(?:warm[- ]?up|focus session \d+|deep work|work block|session \d+)\s*[:|,–—-]+\s*/i, "");
+      title = title.replace(/\s*\((?:goal|outcome)\s*\d+\)\s*$/i, "");
       if (/^(break|short break|wrap[- ]?up|light warm[- ]?up|review progress)/i.test(title)) return;
       const start = toTime(time[1]);
       const end = toTime(time[2]);
@@ -108,8 +109,8 @@ function parsePlanTasks(text) {
       add(title, { scheduledTime: start, estimate: duration || 30, priority: priority && /^P[1-4]$/i.test(priority) ? priority.toUpperCase() : "P2" });
       return;
     }
-    if (section === "immediate" && /^([-*+]\\s+|\\d+[.)]\\s+)/.test(line)) {
-      add(line.replace(/^([-*+]\\s+|\\d+[.)]\\s+)/, ""), { estimate: 30, priority: "P2" });
+    if (section === "immediate" && /^([-*+]\s+|\d+[.)]\s+)/.test(line)) {
+      add(line.replace(/^([-*+]\s+|\d+[.)]\s+)/, ""), { estimate: 30, priority: "P2" });
     }
   });
   return results;
