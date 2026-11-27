@@ -55,6 +55,8 @@ export default function LevelUpV2() {
   const [moodNote, setMoodNote] = useState(data.moods?.[today()]?.note || "");
   const [motivation, setMotivation] = useState("");
   const [motivationBusy, setMotivationBusy] = useState(false);
+  const [headerMotivation, setHeaderMotivation] = useState("Make today count.");
+  const [headerMotivationBusy, setHeaderMotivationBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([{ role: "assistant", content: "Hi! I can update your habits, goals and tasks. Try saying, “Add a habit to read for 20 minutes” or “Mark morning movement complete.”" }]);
   const [listening, setListening] = useState(false);
@@ -103,6 +105,53 @@ export default function LevelUpV2() {
     loadCloud();
     return () => { active = false; };
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!loadedUserId || loadedUserId !== session?.user?.id) return;
+    let active = true;
+    async function loadHeaderMotivation() {
+      setHeaderMotivationBusy(true);
+      const fallbackLines = [
+        "Small steps today create the progress you want tomorrow.",
+        "Show up, take the next step, and let consistency do its work.",
+        "You do not need a perfect day, just one meaningful action.",
+        "Make time for the goals that matter to you.",
+        "Your future is shaped by what you do consistently today."
+      ];
+      const fallback = fallbackLines[new Date().getDate() % fallbackLines.length];
+      try {
+        if (!aiEndpoint) {
+          if (active) setHeaderMotivation(fallback);
+          return;
+        }
+        const response = await fetch(aiEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: "Write exactly one short motivational sentence for the user to see at the top of their productivity app. Keep it personal, practical, positive, and under 18 words. Do not use quotation marks, labels, emojis, or multiple sentences. Make it feel fresh and specific to today.",
+            context: {
+              habits: data.habits,
+              goals: data.goals,
+              tasks: data.tasks,
+              xp: data.xp,
+              today: today(),
+              purpose: "daily dashboard headline"
+            }
+          })
+        });
+        if (!response.ok) throw new Error("Motivation request failed");
+        const result = await response.json();
+        const line = String(result.reply || result.message || "").replace(/\\s+/g, " ").trim();
+        if (active) setHeaderMotivation(line ? line.replace(/^["']|["']$/g, "") : fallback);
+      } catch {
+        if (active) setHeaderMotivation(fallback);
+      } finally {
+        if (active) setHeaderMotivationBusy(false);
+      }
+    }
+    loadHeaderMotivation();
+    return () => { active = false; };
+  }, [loadedUserId, session?.user?.id]);
 
   useEffect(() => {
     if (!session?.user?.id || loadedUserId !== session.user.id) return;
@@ -396,7 +445,7 @@ export default function LevelUpV2() {
         <div className="lv2-side-foot"><div className="lv2-level"><span>YOUR LEVEL</span><b>LV {level}</b><div><i style={{ width: ((data.xp % 500) / 5) + "%" }} /></div><small>{data.xp % 500} / 500 XP</small></div><p>Private by default. Your V2 data is stored separately in this browser.</p></div>
       </aside>
       <main className="lv2-main">
-        <header className="lv2-header"><div><span className="lv2-kicker">YOUR PERSONAL OPERATING SYSTEM</span><h1>{tab === "Today" ? "Make today count." : tab}</h1><p>{dateLabel} · Small steps, tracked consistently. · {syncStatus}</p></div><button className="lv2-ai-shortcut" onClick={() => setTab("AI Assistant")}><Sparkles size={16} /> Ask LevelUp AI</button></header>
+        <header className="lv2-header"><div><h1>{headerMotivationBusy && !headerMotivation ? "A new day, a fresh opportunity." : headerMotivation}</h1><p>{dateLabel} · Small steps, tracked consistently. · {syncStatus}</p></div><button className="lv2-ai-shortcut" onClick={() => setTab("AI Assistant")}><Sparkles size={16} /> Ask LevelUp AI</button></header>
         {notice && <div className="lv2-notice" onClick={() => setNotice("")}>{notice}<X size={14}/></div>}
         {tab === "Today" && <div className="lv2-content">
           <section className="lv2-hero"><div><span className="lv2-kicker">DAILY PROGRESS</span><div className="lv2-score">{percent}<small>%</small></div><h2>{completed === data.habits.length && data.habits.length ? "Everything checked off." : "Build momentum, one action at a time."}</h2><p>{completed} of {data.habits.length} habits completed today</p><div className="lv2-progress"><i style={{ width: percent + "%" }}/></div></div><div className="lv2-hero-orb"><Activity size={34}/></div></section>
