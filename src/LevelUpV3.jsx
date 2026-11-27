@@ -52,6 +52,66 @@ const priorityRank = { High: 0, Medium: 1, Low: 2 };
 const fmtDate = value => value ? new Date(value + "T12:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "No deadline";
 const safeText = value => String(value || "").trim();
 
+function renderInlineAI(text, prefix) {
+  const parts = String(text || "").split(/(\\*\\*[^*]+\\*\\*|\\*[^*]+\\*|\x60[^\x60]+\x60)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={prefix + index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("*") && part.endsWith("*")) return <em key={prefix + index}>{part.slice(1, -1)}</em>;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={prefix + index}>{part.slice(1, -1)}</code>;
+    return part;
+  });
+}
+
+function FormattedAIText({ text }) {
+  const lines = String(text || "").replace(/\\r/g, "").split("\\n");
+  const blocks = [];
+  let paragraph = [];
+  const flushParagraph = () => {
+    if (paragraph.length) {
+      blocks.push({ type: "p", lines: paragraph });
+      paragraph = [];
+    }
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) { flushParagraph(); continue; }
+    const heading = line.match(/^(#{1,3})\\s+(.+)$/);
+    const bullet = line.match(/^[-*+]\\s+(.+)$/);
+    const numbered = line.match(/^\\d+[.)]\\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      blocks.push({ type: "h" + heading[1].length, text: heading[2] });
+    } else if (bullet || numbered) {
+      flushParagraph();
+      const type = bullet ? "ul" : "ol";
+      const items = [bullet ? bullet[1] : numbered[1]];
+      while (i + 1 < lines.length) {
+        const next = lines[i + 1].trim();
+        const match = next.match(type === "ul" ? /^[-*+]\\s+(.+)$/ : /^\\d+[.)]\\s+(.+)$/);
+        if (!match) break;
+        items.push(match[1]);
+        i++;
+      }
+      blocks.push({ type, items });
+    } else {
+      paragraph.push(line);
+    }
+  }
+  flushParagraph();
+  return <div className="v3-formatted-ai">{blocks.map((block, index) => {
+    const key = "ai-" + index;
+    if (block.type === "h1") return <h3 key={key}>{renderInlineAI(block.text, key)}</h3>;
+    if (block.type === "h2") return <h4 key={key}>{renderInlineAI(block.text, key)}</h4>;
+    if (block.type === "h3") return <h5 key={key}>{renderInlineAI(block.text, key)}</h5>;
+    if (block.type === "ul" || block.type === "ol") {
+      const Tag = block.type;
+      return <Tag key={key}>{block.items.map((item, itemIndex) => <li key={key + "-" + itemIndex}>{renderInlineAI(item, key + "-" + itemIndex)}</li>)}</Tag>;
+    }
+    return <p key={key}>{renderInlineAI(block.lines.join(" "), key)}</p>;
+  })}</div>;
+}
+
+
 export default function LevelUpV3() {
   const [data, setData] = useState(readLocal);
   const [session, setSession] = useState(null);
@@ -360,7 +420,7 @@ export default function LevelUpV3() {
           <article><span><Clock3/></span><small>FOCUS TIME TODAY</small><b>{focusToday}<em> min</em></b><p>{data.focusSessions.filter(s => s.date === today()).length} sessions</p></article>
           <article><span><Target/></span><small>GOAL PROGRESS</small><b>{goalProgress}%</b><p>{activeGoals.length} active goals</p></article>
         </section>
-        {plan && <section className="v3-panel v3-plan"><div className="v3-panel-heading"><div><span className="v3-kicker">YOUR AI GENERATED PLAN</span><h3>Today's game plan</h3></div><button className="v3-icon-button" onClick={() => setPlan("")}><X size={16}/></button></div><div className="v3-ai-text">{plan}</div></section>}
+        {plan && <section className="v3-panel v3-plan"><div className="v3-panel-heading"><div><span className="v3-kicker">YOUR AI GENERATED PLAN</span><h3>Today's game plan</h3></div><button className="v3-icon-button" onClick={() => setPlan("")}><X size={16}/></button></div><div className="v3-ai-text"><FormattedAIText text={plan} /></div></section>}
         <div className="v3-two-col">
           <section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">DO THE IMPORTANT THINGS FIRST</span><h3>Today's priorities</h3></div><button className="v3-text-button" onClick={() => setTab("Tasks")}>All tasks <ArrowRight size={14}/></button></div>
             {todayTasks.slice(0,5).map(t => <div className="v3-task-row" key={t.id}><button className="v3-check" onClick={() => toggleTask(t.id)}><Circle size={18}/></button><div className="v3-task-main"><b>{t.title}</b><small>{t.priority} priority · {fmtDate(t.dueDate)}</small></div><span className={"v3-priority " + (t.priority || "Medium").toLowerCase()}>{t.priority || "Medium"}</span></div>)}
@@ -377,7 +437,7 @@ export default function LevelUpV3() {
             {activeGoals.slice(0,4).map(g => <div className="v3-goal-line" key={g.id}><div><b>{g.title}</b><strong>{g.progress || 0}%</strong></div><div className="v3-progress"><i style={{ width: (g.progress || 0) + "%" }}/></div></div>)}
             {!activeGoals.length && <div className="v3-empty">Create a goal and break it into milestones.</div>}
           </section>
-          <section className="v3-panel v3-review-card"><div className="v3-panel-heading"><div><span className="v3-kicker">CLOSE THE LOOP</span><h3>Daily review</h3></div><Sparkles size={19}/></div><p>Take two minutes to understand what worked and choose a better starting point for tomorrow.</p><button onClick={() => makeReview("daily")} disabled={reviewBusy}><RefreshCw size={15}/>{reviewBusy ? "Preparing review…" : "Generate my daily review"}</button>{review && <div className="v3-ai-text v3-review-text">{review}</div>}</section>
+          <section className="v3-panel v3-review-card"><div className="v3-panel-heading"><div><span className="v3-kicker">CLOSE THE LOOP</span><h3>Daily review</h3></div><Sparkles size={19}/></div><p>Take two minutes to understand what worked and choose a better starting point for tomorrow.</p><button onClick={() => makeReview("daily")} disabled={reviewBusy}><RefreshCw size={15}/>{reviewBusy ? "Preparing review…" : "Generate my daily review"}</button>{review && <div className="v3-ai-text v3-review-text"><FormattedAIText text={review} /></div>}</section>
         </div>
       </div>}
 
@@ -399,7 +459,7 @@ export default function LevelUpV3() {
 
       {tab === "Insights" && <div className="v3-page"><section className="v3-metrics v3-insight-metrics"><article><span><CheckCircle2/></span><small>TASK COMPLETION</small><b>{data.tasks.length ? Math.round(doneTasks.length/data.tasks.length*100) : 0}%</b><p>{doneTasks.length} of {data.tasks.length} tasks</p></article><article><span><Flame/></span><small>HABIT RATE TODAY</small><b>{habitRate}%</b><p>{completedHabits} habits complete</p></article><article><span><Clock3/></span><small>FOCUS LAST 7 DAYS</small><b>{last7Focus}<em> min</em></b><p>Tracked focus time</p></article><article><span><Target/></span><small>GOAL PROGRESS</small><b>{goalProgress}%</b><p>{data.goals.length} goals tracked</p></article></section><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">RECENT CONSISTENCY</span><h3>Habit activity, last 7 days</h3></div></div><div className="v3-week-bars">{last7.map(d => <div key={d.key}><div className="v3-bar"><i style={{ height: (data.habits.length ? d.count / data.habits.length * 100 : 0) + "%" }}/></div><b>{d.count}</b><small>{d.label}</small></div>)}</div></section><div className="v3-two-col"><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">ACCOUNTABILITY</span><h3>Weekly review</h3></div></div><p className="v3-muted">Look at what moved forward, what slipped and what deserves attention next week.</p><button className="v3-primary" onClick={() => makeReview("weekly")} disabled={reviewBusy}><Sparkles size={15}/>{reviewBusy ? "Preparing…" : "Generate weekly review"}</button>{review && <div className="v3-ai-text v3-review-text">{review}</div>}</section><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">WHAT NEEDS ATTENTION</span><h3>Execution signals</h3></div></div><p>{highTasks.length} high priority tasks are still open.</p><p>{activeGoals.filter(g => g.deadline && g.deadline < today()).length} active goals have passed their target date.</p><p>{data.tasks.filter(t => t.status !== "done" && t.dueDate && t.dueDate < today()).length} tasks are overdue.</p></section></div></div>}
 
-      {tab === "AI Coach" && <div className="v3-page v3-coach-page"><section className="v3-coach-intro"><div className="v3-coach-icon"><Bot size={26}/></div><div><span className="v3-kicker">YOUR PERSONAL EXECUTION COACH</span><h2>Think clearly. Choose the next step.</h2><p>Your coach can use your current tasks, goals, habits and focus history as context.</p></div></section><section className="v3-chat-panel"><div className="v3-chat-messages">{chat.map((m,i) => <div className={"v3-chat-message " + m.role} key={i}><span>{m.role === "assistant" ? <Bot size={15}/> : "You"}</span><p>{m.text}</p></div>)}{chatBusy && <div className="v3-chat-message assistant"><span><Bot size={15}/></span><p>Thinking…</p></div>}<div ref={chatEnd}/></div><form className="v3-chat-composer" onSubmit={e => { e.preventDefault(); sendChat(); }}><button type="button" onClick={startVoice} title="Voice input"><Mic size={17}/></button><input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={voiceOn ? "Listening…" : "Ask about your goals, tasks or today's plan…"}/><button type="submit" disabled={!chatInput.trim() || chatBusy}><Send size={17}/></button></form><div className="v3-chat-suggestions">{["What should I focus on today?","Break my biggest goal into milestones","Review my unfinished tasks","Help me plan a realistic week"].map(s => <button key={s} onClick={() => sendChat(s)}>{s}</button>)}</div></section></div>}
+      {tab === "AI Coach" && <div className="v3-page v3-coach-page"><section className="v3-coach-intro"><div className="v3-coach-icon"><Bot size={26}/></div><div><span className="v3-kicker">YOUR PERSONAL EXECUTION COACH</span><h2>Think clearly. Choose the next step.</h2><p>Your coach can use your current tasks, goals, habits and focus history as context.</p></div></section><section className="v3-chat-panel"><div className="v3-chat-messages">{chat.map((m,i) => <div className={"v3-chat-message " + m.role} key={i}><span>{m.role === "assistant" ? <Bot size={15}/> : "You"}</span><div className="v3-chat-message-content"><FormattedAIText text={m.text} /></div></div>)}{chatBusy && <div className="v3-chat-message assistant"><span><Bot size={15}/></span><p>Thinking…</p></div>}<div ref={chatEnd}/></div><form className="v3-chat-composer" onSubmit={e => { e.preventDefault(); sendChat(); }}><button type="button" onClick={startVoice} title="Voice input"><Mic size={17}/></button><input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={voiceOn ? "Listening…" : "Ask about your goals, tasks or today's plan…"}/><button type="submit" disabled={!chatInput.trim() || chatBusy}><Send size={17}/></button></form><div className="v3-chat-suggestions">{["What should I focus on today?","Break my biggest goal into milestones","Review my unfinished tasks","Help me plan a realistic week"].map(s => <button key={s} onClick={() => sendChat(s)}>{s}</button>)}</div></section></div>}
       <footer className="v3-footer">LevelUp V3 <span>Plan with purpose. Execute with focus.</span></footer>
     </main>
   </div>;
