@@ -12,6 +12,8 @@ export default function V32IntelligencePanel({ data, onBalance, onUndo }) {
  const rescheduled=history.activityEvents.filter(e=>["task_rescheduled","automatic_reschedule","workload_balanced"].includes(e.type)).length;
  const focus=history.taskTimeLogs.reduce((n,x)=>n+Number(x.minutes||0),0);
  const maxDone=Math.max(1,...weekly.map(x=>x.completed)),maxFocus=Math.max(1,...weekly.map(x=>x.focusMinutes));
+ const timeByTask=history.taskTimeLogs.reduce((map,item)=>{const key=item.task||"Unassigned focus";map[key]=(map[key]||0)+Number(item.minutes||0);return map;},{});
+ const timeRows=Object.entries(timeByTask).sort((a,b)=>b[1]-a[1]).slice(0,8);
  const label=type=>({task_created:"Task created",task_completed:"Task completed",task_reopened:"Task reopened",task_rescheduled:"Task rescheduled",task_deleted:"Task deleted",habit_completed:"Habit completed",focus_session_completed:"Focus session saved",missed_schedule:"Missed schedule",automatic_reschedule:"Conflict resolved",workload_balanced:"Workload balanced",goal_progress_changed:"Goal updated",schedule_undo:"Schedule changes undone",distraction:"Distraction recorded"}[type]||type.replaceAll("_"," "));
  return <div className="v3-page v32-intelligence">
   <section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">YOUR PERSONAL LEARNING SYSTEM</span><h3>Performance intelligence</h3></div><Brain size={20}/></div>
@@ -27,6 +29,9 @@ export default function V32IntelligencePanel({ data, onBalance, onUndo }) {
   </section>
   <section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">LAST SEVEN DAYS</span><h3>Weekly performance trends</h3></div><TrendingUp size={19}/></div>
    <div className="v32-weekly-trends">{weekly.map(day=><div key={day.date}><b>{day.label}</b><div className="v32-trend-track"><i style={{height:(day.completed/maxDone*100)+"%"}}/></div><small>{day.completed} done</small><div className="v32-focus-track"><i style={{width:(day.focusMinutes/maxFocus*100)+"%"}}/></div><small>{day.focusMinutes} focus min</small><small>{day.missed} missed, {day.distractions} distractions</small></div>)}</div>
+  </section>
+  <section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">PLANNED VERSUS ACTUAL</span><h3>Time spent by task</h3></div><Clock3 size={19}/></div>
+   {timeRows.length?timeRows.map(([task,minutes])=>{const planned=history.tasks.filter(t=>t.title===task).reduce((n,t)=>n+(Number(t.estimate)||0),0);return <div className="v32-forecast" key={task}><div><b>{task}</b><span>{minutes} min tracked</span></div><small>{planned?("Current estimate: "+planned+" min. Actual focus time: "+minutes+" min."):"Actual focus time: "+minutes+" min. Add a task estimate to compare planned and actual duration."}</small></div>;}):<div className="v3-empty">Complete focus sessions linked to tasks to build actual versus planned duration history.</div>}
   </section>
   <section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">GOAL FORECASTS</span><h3>Predicted completion</h3></div><Target size={19}/></div>
    {forecasts.length?forecasts.map(goal=><div className="v32-forecast" key={goal.id}><div><b>{goal.title}</b><span>{goal.progress||0}% complete</span></div><div className="v3-progress"><i style={{width:(goal.progress||0)+"%"}}/></div><small>{goal.health}. Estimated completion: {goal.forecast==="Not enough history"?"More progress history needed":goal.forecast==="Completed"?"Already completed":goal.forecast}.</small></div>):<div className="v3-empty">Add a goal to see its forecast.</div>}
