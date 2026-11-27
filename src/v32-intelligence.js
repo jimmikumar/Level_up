@@ -70,7 +70,7 @@ export function detectMissedSchedules(value,now=new Date()){
 export function autoBalanceWorkload(value){
  const data=ensureV32History(value),tasks=[...ensureV32History(value).tasks],candidates=tasks.filter(t=>t.status!=="done"&&(!t.scheduledDate||t.scheduledDate<dayKey()));
  if(!candidates.length)return {data,moved:0};
- const snapshot=candidates.map(t=>({taskId:t.id,scheduledDate:t.scheduledDate||"",scheduledTime:t.scheduledTime||""));
+ const snapshot=candidates.map(t=>({taskId:t.id,scheduledDate:t.scheduledDate||"",scheduledTime:t.scheduledTime||""}));
  const fixed=tasks.filter(t=>t.status!=="done"&&t.scheduledDate&&t.scheduledTime&&!candidates.some(c=>String(c.id)===String(t.id)));
  const hours=Math.max(1,Math.min(16,Number(data.settings.availableHours)||8)),startDay=540,endDay=540+hours*60;
  candidates.sort((a,b)=>(rank[a.priority||"P2"]-rank[b.priority||"P2"])||(a.dueDate||"9999").localeCompare(b.dueDate||"9999"));
