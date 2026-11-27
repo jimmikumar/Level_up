@@ -88,3 +88,24 @@
 .v32-history-list>div{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:11px 0;border-bottom:1px solid var(--v3-border)}
 .v32-history-list span{font-size:10px;color:#c4b4ff}.v32-history-list b{font-size:10px;text-align:right}.v32-history-list small{grid-column:1/-1}
 @media(max-width:700px){.v32-intel-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.v32-weekly-trends{gap:4px}.v32-weekly-trends small{font-size:7px}.v32-history-list>div{grid-template-columns:1fr}.v32-history-list b{text-align:left}}
+
+/* V3.2 predictive intelligence and conversational assistant */
+.v32-prediction-grid{display:grid;gap:9px;margin-top:13px}
+.v32-recommendation{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--v3-border);border-radius:10px;background:#101a2c}
+.v32-recommendation>div{display:grid;gap:5px;min-width:0}
+.v32-recommendation b{font-size:11px}
+.v32-recommendation span,.v32-risk-meter small{font-size:9px;color:var(--v3-muted);line-height:1.5}
+.v32-recommendation button{border:1px solid #59458c;border-radius:7px;background:#292044;color:#d2c4ff;padding:7px 9px;font-size:9px;font-weight:700;white-space:nowrap}
+.v32-recommendation.risk{border-color:#8b4552}
+.v32-recommendation.warning{border-color:#80622f}
+.v32-recommendation.positive{border-color:#286b56}
+.v32-risk-meter{display:grid;gap:9px;margin:12px 0}
+.v32-risk-meter>div:first-child{display:flex;justify-content:space-between;gap:8px;font-size:10px}
+.v32-risk-track{height:7px;background:#202c41;border-radius:8px;overflow:hidden}
+.v32-risk-track i{display:block;height:100%;background:linear-gradient(90deg,#4bb88d,#d5a04b,#dc6477);border-radius:8px}
+.risk-high{color:#ff899c}.risk-moderate{color:#f5ca7a}.risk-low{color:#8ce0bd}
+.v32-whatif-label{display:flex;justify-content:space-between;font-size:10px;color:var(--v3-muted);margin:12px 0}
+.v32-whatif-slider{width:100%;accent-color:#9575ff}
+.v32-whatif-result{display:grid;gap:6px;margin-top:14px;padding:13px;border-radius:9px;background:#131e31}
+.v32-whatif-result b{font-size:20px;color:#c7b7ff}.v32-whatif-result span{font-size:9px;color:var(--v3-muted);line-height:1.5}
+@media(max-width:700px){.v32-recommendation{align-items:flex-start;flex-direction:column}.v32-recommendation button{white-space:normal}}

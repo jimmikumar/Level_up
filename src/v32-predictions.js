@@ -1,0 +1,33 @@
+const dayKey=(date=new Date())=>{const d=new Date(date);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-");};
+const rank={P1:0,P2:1,P3:2,P4:3,High:0,Medium:1,Low:2};
+const confidence=count=>count>=12?"High":count>=5?"Moderate":"Limited";
+export function getPredictiveInsights(data,now=new Date()){
+ const tasks=data.tasks||[],open=tasks.filter(t=>t.status!=="done"),events=data.activityEvents||[],logs=data.taskTimeLogs||[],sessions=data.focusSessions||[];
+ const cutoff=new Date(now.getTime()-30*86400000),recentEvents=events.filter(e=>new Date(e.at)>=cutoff);
+ const completed=recentEvents.filter(e=>e.type==="task_completed").length;
+ const completionPerDay=completed/30;
+ const averageEstimate= open.length?Math.round(open.reduce((n,t)=>n+(Number(t.estimate)||30),0)/open.length):30;
+ const capacity=Math.max(1,Number(data.settings?.availableHours)||8)*60;
+ const overdue=open.filter(t=>t.dueDate&&t.dueDate<dayKey(now));
+ const dueSoon=open.filter(t=>t.dueDate&&t.dueDate>=dayKey(now)&&t.dueDate<=dayKey(new Date(now.getTime()+7*86400000)));
+ const dueSoonMinutes=dueSoon.reduce((n,t)=>n+(Number(t.estimate)||30),0);
+ const daysToDeadline=dueSoon.length?Math.max(1,Math.ceil((new Date(dueSoon.sort((a,b)=>a.dueDate.localeCompare(b.dueDate))[0].dueDate+"T12:00:00")-new Date(dayKey(now)+"T12:00:00"))/86400000)):7;
+ const expectedCapacity=daysToDeadline*capacity;
+ const deadlineRisk=dueSoon.length&&dueSoonMinutes>expectedCapacity?"High":overdue.length?"High":dueSoon.length&&dueSoonMinutes>expectedCapacity*.75?"Moderate":"Low";
+ const tomorrow=new Date(now);tomorrow.setDate(tomorrow.getDate()+1);const tomorrowKey=dayKey(tomorrow);
+ const tomorrowTasks=open.filter(t=>t.scheduledDate===tomorrowKey||(t.dueDate===tomorrowKey&&!t.scheduledDate));
+ const tomorrowMinutes=tomorrowTasks.reduce((n,t)=>n+(Number(t.estimate)||30),0);
+ const durationRows=logs.reduce((map,l)=>{const key=String(l.taskId||l.task||"unknown");map[key]=(map[key]||0)+Number(l.minutes||0);return map;},{});
+ const durationInsights=Object.entries(durationRows).map(([key,actual])=>{const task=tasks.find(t=>String(t.id)===key)||tasks.find(t=>t.title===key);if(!task)return null;const planned=Number(task.estimate)||30;return {title:task.title,planned,actual,ratio:actual/Math.max(1,planned)};}).filter(Boolean).sort((a,b)=>b.ratio-a.ratio).slice(0,5);
+ const byHour={};sessions.forEach(s=>{const date=new Date(s.createdAt||s.date);if(!Number.isNaN(date.getTime())){const hour=date.getHours();byHour[hour]=(byHour[hour]||0)+1;}});
+ const bestHour=Object.entries(byHour).sort((a,b)=>b[1]-a[1])[0];
+ const goalForecasts=(data.goals||[]).map(goal=>{const history=(data.goalProgressHistory||[]).filter(x=>String(x.goalId)===String(goal.id)).sort((a,b)=>new Date(a.at)-new Date(b.at));const sample=history.length;const first=history[0],last=history[history.length-1];let forecast=null;if(sample>=2&&Number(last.progress)>Number(first.progress)){const days=Math.max(1,(new Date(last.at)-new Date(first.at))/86400000);const rate=(Number(last.progress)-Number(first.progress))/days;const remaining=Math.ceil((100-Number(goal.progress||0))/rate);forecast=dayKey(new Date(now.getTime()+remaining*86400000));}return {...goal,forecast,confidence:confidence(sample),samples:sample};});
+ const recs=[];
+ if(overdue.length)recs.push({id:"overdue",level:"risk",title:overdue.length+" overdue task"+(overdue.length===1?"":"s"),detail:"Review these first, then reschedule only what still matters.",action:"Review overdue tasks"});
+ if(deadlineRisk==="High"||deadlineRisk==="Moderate")recs.push({id:"deadline",level:"risk",title:"Deadline pressure is "+deadlineRisk.toLowerCase(),detail:dueSoon.length+" tasks due within seven days need about "+dueSoonMinutes+" minutes.",action:"Balance workload"});
+ if(tomorrowMinutes>capacity)recs.push({id:"tomorrow",level:"warning",title:"Tomorrow may be overloaded",detail:"Scheduled work is "+tomorrowMinutes+" minutes against "+capacity+" available minutes.",action:"Balance workload"});
+ if(durationInsights[0]?.ratio>1.25)recs.push({id:"duration",level:"info",title:"Some tasks take longer than estimated",detail:durationInsights[0].title+" used "+durationInsights[0].actual+" minutes against a "+durationInsights[0].planned+" minute estimate.",action:"Adjust estimates"});
+ if(bestHour&&Number(bestHour[1])>=3)recs.push({id:"focus",level:"positive",title:"Your strongest focus start time",detail:"Your recorded focus sessions most often start around "+String(bestHour[0]).padStart(2,"0")+":00.",action:"Use this time"});
+ if(!recs.length)recs.push({id:"steady",level:"positive",title:"No urgent warning from current records",detail:"Keep logging tasks and focus sessions to improve future predictions.",action:"View weekly report"});
+ return {completed,completionPerDay,averageEstimate,capacity,overdueCount:overdue.length,dueSoonCount:dueSoon.length,dueSoonMinutes,deadlineRisk,tomorrowMinutes,tomorrowCapacity:capacity,durationInsights,bestHour:bestHour?Number(bestHour[0]):null,goalForecasts,recommendations:recs,historySamples:recentEvents.length,confidence:confidence(recentEvents.length)};
+}

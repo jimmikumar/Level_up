@@ -209,7 +209,7 @@ export default function LevelUpV3_2() {
   const [review, setReview] = useState("");
   const [reviewBusy, setReviewBusy] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const [chat, setChat] = useState([{ role: "assistant", text: "I can help you plan your day, prioritise tasks, break goals into milestones and review your progress. What would you like to work on?" }]);
+  const [chat, setChat] = useState(() => readLocal().coachConversation?.length ? readLocal().coachConversation : [{ role: "assistant", text: "I can help you plan your day, prioritise tasks, break goals into milestones and review your progress. What would you like to work on?" }]);
   const [chatBusy, setChatBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [focusTask, setFocusTask] = useState("");
@@ -264,7 +264,10 @@ export default function LevelUpV3_2() {
         setLoadedUser(id);
         return;
       }
-      if (row?.progress && typeof row.progress === "object") setData({ ...readLocal(), ...row.progress, tasks: (row.progress.tasks || readLocal().tasks || []).map(t => ({ ...t, priority: ({ High: "P1", Medium: "P2", Low: "P3" })[t.priority] || t.priority || "P2" })) });
+      if (row?.progress && typeof row.progress === "object") {
+        setData({ ...readLocal(), ...row.progress, tasks: (row.progress.tasks || readLocal().tasks || []).map(t => ({ ...t, priority: ({ High: "P1", Medium: "P2", Low: "P3" })[t.priority] || t.priority || "P2" })) });
+        if (Array.isArray(row.progress.coachConversation) && row.progress.coachConversation.length) setChat(row.progress.coachConversation);
+      }
       setLoadedUser(id);
       setSync("Cloud ready");
     }
@@ -340,6 +343,7 @@ export default function LevelUpV3_2() {
   }, [focusRunning, focusMode, focusTask]);
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
+  useEffect(() => { setData(current => current.coachConversation === chat ? current : { ...current, coachConversation: chat.slice(-40) }); }, [chat]);
 
   const callAI = async (message, purpose) => {
     if (!AI_URL) throw new Error("AI endpoint is not configured.");
@@ -352,7 +356,8 @@ export default function LevelUpV3_2() {
           purpose,
           today: today(),
           learning: learningContext,
-          recentConversation: purpose === "assistant_chat" ? chat.slice(-10) : undefined,
+          recentConversation: purpose === "assistant_chat" ? chat.slice(-12) : undefined,
+          conversationRules: purpose === "assistant_chat" ? "Treat this as an ongoing conversation. Resolve references such as it, those tasks, yesterday and move them from recent conversation plus current data. Ask one short clarification if the target is ambiguous. Never claim an action happened unless an action is returned and applied. Use action types add_task, add_habit, add_goal, complete_habit, update_task, delete_task, reschedule_task and update_goal. Prefer one safe action at a time. Do not invent task IDs." : undefined,
           activityHistory: ensureV32History(data).activityEvents.slice(-60),
           goalProgressHistory: ensureV32History(data).goalProgressHistory.slice(-60),
           tasks: data.tasks,
@@ -511,7 +516,7 @@ export default function LevelUpV3_2() {
     } finally { setReviewBusy(false); }
   }
 
-  function applyAction(action) {
+  function applyAction(action, confirmed = false) {
     if (!action || typeof action !== "object") return;
     if (action.type === "add_task" && action.title) {
       update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), title: action.title, priority: action.priority && ["P1","P2","P3","P4"].includes(action.priority) ? action.priority : "P2", dueDate: action.dueDate || "", scheduledDate: action.scheduledDate || "", scheduledTime: action.scheduledTime || "", goalId: null, estimate: Number(action.estimate) || 30, status: "todo" }] }));
@@ -524,9 +529,13 @@ export default function LevelUpV3_2() {
     } else if (action.type === "update_task" && action.id) {
       update(d => ({ ...d, tasks: d.tasks.map(t => t.id === action.id ? { ...t, ...(action.title ? { title: action.title } : {}), ...(action.priority && ["P1","P2","P3","P4"].includes(action.priority) ? { priority: action.priority } : {}), ...(action.scheduledDate ? { scheduledDate: action.scheduledDate } : {}), ...(action.scheduledTime ? { scheduledTime: action.scheduledTime } : {}) } : t) }));
     } else if (action.type === "delete_task" && action.id) {
-      update(d => ({ ...d, tasks: d.tasks.filter(t => t.id !== action.id) }));
+      const target = data.tasks.find(t => String(t.id) === String(action.id));
+      if (!target || (!confirmed && !window.confirm("Delete the task \"" + target.title + "\"? This cannot be undone."))) return;
+      update(d => ({ ...d, tasks: d.tasks.filter(t => String(t.id) !== String(action.id)) }));
     } else if (action.type === "reschedule_task" && action.id && action.scheduledDate) {
-      update(d => ({ ...d, tasks: d.tasks.map(t => t.id === action.id ? { ...t, scheduledDate: action.scheduledDate, scheduledTime: action.scheduledTime || t.scheduledTime } : t) }));
+      const target = data.tasks.find(t => String(t.id) === String(action.id));
+      if (!target || (!confirmed && !window.confirm("Move \"" + target.title + "\" to " + action.scheduledDate + (action.scheduledTime ? " at " + action.scheduledTime : "") + "?"))) return;
+      update(d => ({ ...d, tasks: d.tasks.map(t => String(t.id) === String(action.id) ? { ...t, scheduledDate: action.scheduledDate, scheduledTime: action.scheduledTime || t.scheduledTime } : t) }));
     } else if (action.type === "update_goal") {
       update(d => ({ ...d, goals: d.goals.map(g => g.id === action.id ? { ...g, progress: Math.max(0, Math.min(100, Number(action.progress) || 0)) } : g) }));
     }
@@ -540,8 +549,13 @@ export default function LevelUpV3_2() {
     try {
       if (!AI_URL) throw new Error("AI endpoint is not configured. You can still manage tasks, habits and goals manually.");
       const result = await callAI(prompt, "assistant_chat");
-      if (result.action) applyAction(result.action);
-      setChat(items => [...items, { role: "assistant", text: result.reply || "Done." }]);
+      if (Array.isArray(result.actions) && result.actions.length) {
+        const actions = result.actions.filter(action => action && typeof action === "object");
+        const destructive = actions.some(action => ["delete_task", "reschedule_task"].includes(action.type));
+        const summary = actions.map(action => action.type.replaceAll("_", " ")).join(", ");
+        if (!destructive || window.confirm("The AI wants to make these changes: " + summary + ". Continue?")) actions.forEach(action => applyAction(action, true));
+      } else if (result.action) applyAction(result.action);
+      setChat(items => [...items, { role: "assistant", text: result.reply || "I have processed that request." }]);
     } catch (error) {
       setChat(items => [...items, { role: "assistant", text: error.message + " Your saved data remains safe." }]);
     } finally { setChatBusy(false); }
@@ -659,7 +673,7 @@ export default function LevelUpV3_2() {
 
       {tab === "Insights" && <div className="v3-page"><section className="v3-metrics v3-insight-metrics"><article><span><CheckCircle2/></span><small>PRODUCTIVITY SCORE</small><b>{productivityScore}%</b><p>Based on tasks, habits and focus</p></article><article><span><Flame/></span><small>HABIT RATE TODAY</small><b>{habitRate}%</b><p>{completedHabits} habits complete</p></article><article><span><Clock3/></span><small>FOCUS LAST 7 DAYS</small><b>{last7Focus}<em> min</em></b><p>Tracked focus time</p></article><article><span><Target/></span><small>GOAL PROGRESS</small><b>{goalProgress}%</b><p>{data.goals.length} goals tracked</p></article></section><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">RECENT CONSISTENCY</span><h3>Habit activity, last 7 days</h3></div></div><div className="v3-week-bars">{last7.map(d => <div key={d.key}><div className="v3-bar"><i style={{ height: (data.habits.length ? d.count / data.habits.length * 100 : 0) + "%" }}/></div><b>{d.count}</b><small>{d.label}</small></div>)}</div></section><div className="v3-two-col"><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">ACCOUNTABILITY</span><h3>Weekly review</h3></div></div><p className="v3-muted">Look at what moved forward, what slipped and what deserves attention next week.</p><button className="v3-primary" onClick={() => makeReview("weekly")} disabled={reviewBusy}><Sparkles size={15}/>{reviewBusy ? "Preparing…" : "Generate weekly review"}</button>{review && <div className="v3-ai-text v3-review-text">{review}</div>}</section><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">WHAT NEEDS ATTENTION</span><h3>Execution signals</h3></div></div><p>{highTasks.length} high priority tasks are still open.</p><p>{activeGoals.filter(g => g.deadline && g.deadline < today()).length} active goals have passed their target date.</p><p>{data.tasks.filter(t => t.status !== "done" && t.dueDate && t.dueDate < today()).length} tasks are overdue.</p><p>{staleTasks.length} open tasks have been waiting for more than seven days.</p><p>{productivityScore}% is your current productivity score.</p></section></div></div>}
 
-      {tab === "Intelligence" && <V32IntelligencePanel data={data}
+      {tab === "Intelligence" && <V32IntelligencePanel data={data} onWeeklyReport={() => makeReview("weekly")} report={review} reportBusy={reviewBusy}
         onBalance={() => {
           const result = autoBalanceWorkload(data);
           if (!result.moved) { setNotice("There are no unscheduled or overdue tasks to balance."); return; }
