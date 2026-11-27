@@ -233,6 +233,21 @@ export default function LevelUpV3_2() {
     return () => window.clearInterval(timer);
   }, [focusRunning]);
 
+  useEffect(() => {
+    if (!focusRunning) return;
+    const limit = focusMode === "break" ? 5 * 60 : Number(focusPreset) * 60;
+    if (focusSeconds >= limit) {
+      if (focusMode === "break") {
+        setFocusRunning(false);
+        setFocusSeconds(0);
+        setFocusMode("focus");
+        setNotice("Your break is complete. Ready for the next focus session?");
+      } else {
+        finishFocus();
+      }
+    }
+  }, [focusSeconds, focusRunning, focusMode, focusPreset]);
+
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
 
   const callAI = async (message, purpose) => {
@@ -374,7 +389,7 @@ export default function LevelUpV3_2() {
     setPlanBusy(true);
     try {
       const result = await callAI(
-        `Act as my personal execution coach. Create a realistic plan for ${availableHours} available working hours today. Use my actual open tasks, P1 to P4 priorities, deadlines, estimates, scheduled times, habits and goals. Review yesterday performance included in context, identify unfinished work and avoid repeating an overloaded plan. Give me no more than three main outcomes, then a time blocked schedule that fits within ${availableHours} hours. Respect existing scheduled times and deadlines. Include breaks and one small first action I can start immediately. Do not invent meetings or claim calendar access. Return a concise, well formatted plan with headings.`,
+        `Act as my personal execution coach. Create a realistic plan for ${availableHours} available working hours today. Consider my energy level (${energyLevel}), my actual open tasks, P1 to P4 priorities, deadlines, estimates, scheduled times, habits and goals. Make every actionable step a numbered or bulleted item so I can add individual suggestions to my task list. Review yesterday performance included in context, identify unfinished work and avoid repeating an overloaded plan. Give me no more than three main outcomes, then a time blocked schedule that fits within ${availableHours} hours. Respect existing scheduled times and deadlines. Include breaks and one small first action I can start immediately. Do not invent meetings or claim calendar access. Return a concise, well formatted plan with headings.`,
         "daily_plan"
       );
       const text = result.reply || "I could not prepare a plan.";
@@ -449,6 +464,11 @@ export default function LevelUpV3_2() {
     recognition.start();
   }
   function finishFocus() {
+    if (focusMode === "break") {
+      setFocusRunning(false); setFocusSeconds(0); setFocusMode("focus");
+      setNotice("Break ended. Start another focus session when you are ready.");
+      return;
+    }
     if (focusSeconds < 60) {
       setFocusRunning(false); setFocusSeconds(0); setFocusMode("focus");
       setNotice("Session was shorter than one minute, so it was not added to your focus history.");
