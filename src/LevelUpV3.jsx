@@ -37,7 +37,12 @@ function readLocal() {
       tasks: (old.tasks || []).map(t => ({ ...t, priority: t.priority || "Medium", dueDate: t.dueDate || "", status: t.done ? "done" : "todo", estimate: 30 })),
       goals: (old.goals || []).map(g => ({ ...g, milestones: g.milestones || [] })),
       habits: (old.habits || []).map(h => ({ ...h, active: true })),
-      habitLog: old.habitLog || {},
+      habitLog: {
+        ...(old.habitLog || {}),
+        ...(old.day === today() && (old.habits || []).some(h => h.done)
+          ? { [today()]: [...new Set([...(old.habitLog?.[today()] || []), ...(old.habits || []).filter(h => h.done).map(h => h.id)])] }
+          : {})
+      },
       xp: old.xp || 0
     };
     return starter;
