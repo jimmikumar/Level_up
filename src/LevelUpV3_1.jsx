@@ -191,7 +191,7 @@ export default function LevelUpV3() {
         setLoadedUser(id);
         return;
       }
-      if (row?.progress && typeof row.progress === "object") setData({ ...readLocal(), ...row.progress });
+      if (row?.progress && typeof row.progress === "object") setData({ ...readLocal(), ...row.progress, tasks: (row.progress.tasks || readLocal().tasks || []).map(t => ({ ...t, priority: ({ High: "P1", Medium: "P2", Low: "P3" })[t.priority] || t.priority || "P2" })) });
       setLoadedUser(id);
       setSync("Cloud ready");
     }
