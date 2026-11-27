@@ -16,3 +16,10 @@
 .v3-priority.p4{background:#29354a;color:#c5d0e1}
 .v3-task-form input[type="number"]{max-width:100px}
 @media(max-width:700px){.v31-calendar-toolbar{align-items:flex-start;flex-direction:column}.v31-hours{flex-wrap:wrap}}
+
+.v31-priority-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 15px}
+.v31-priority-grid>div{display:grid;gap:5px;padding:11px;border:1px solid var(--v3-border);border-radius:9px;background:#0d1626}
+.v31-priority-grid b{font-size:12px;color:#c7b7ff}
+.v31-priority-grid span{font-size:9px;line-height:1.4;color:var(--v3-muted)}
+.v31-priority-grid strong{font-size:18px}
+@media(max-width:700px){.v31-priority-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
