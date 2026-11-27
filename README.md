@@ -1,6 +1,6 @@
 # LevelUp
 
-LevelUp is a personal growth tracker with two selectable versions. It is built with React and Vite and can be hosted as a static site on Cloudflare Pages.
+LevelUp is a personal growth tracker with selectable preserved versions, including the latest V3.2 workspace. It is built with React and Vite and can be hosted as a static site on Cloudflare Pages.
 
 ## Versions
 
@@ -63,3 +63,12 @@ For Cloudflare Pages, connect this GitHub repository and use:
 - Root directory: `/`
 
 The existing V1 service worker and PWA setup remain in place. Review `NO_SURPRISE_BILLING.md` before enabling any paid service.
+
+
+### V3 and V3.1
+V3 and V3.1 are preserved in their own source files and use the V3 Supabase progress table.
+
+### V3.2
+V3.2 adds a compact version selector, AI plan suggestions that can be added individually or in bulk as tasks, day, week and month calendar views with drag and drop rescheduling, schedule conflict warnings, overdue task catch up scheduling that preserves original deadlines, energy aware AI planning, a next best action panel, goal health signals, productivity scoring, stale task signals, focus presets and break timing, and expanded AI Coach task actions.
+
+V3.2 intentionally reuses the existing levelup-v3-data local storage key and user_progress_v3 Supabase table. This keeps existing V3 progress available without a new database migration. V1, V2, V3 and V3.1 remain selectable.
