@@ -228,7 +228,16 @@ export default function LevelUpV2() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: prompt, context: { habits: data.habits, goals: data.goals, tasks: data.tasks, xp: data.xp, today: today() } })
         });
-        if (!response.ok) throw new Error("AI service returned " + response.status);
+        if (!response.ok) {
+          const errorBody = await response.text();
+          let errorMessage = errorBody;
+          try {
+            const parsedError = JSON.parse(errorBody);
+            errorMessage = parsedError.detail || parsedError.error || parsedError.message || errorBody;
+            if (typeof errorMessage !== "string") errorMessage = JSON.stringify(errorMessage);
+          } catch {}
+          throw new Error("AI service returned " + response.status + ": " + errorMessage.slice(0, 500));
+        }
         const result = await response.json();
         if (result.action) applyRemoteAction(result.action);
         reply(result.reply || result.message || "Done.");
@@ -333,7 +342,16 @@ export default function LevelUpV2() {
             context: { habits: data.habits, goals: data.goals, tasks: data.tasks, xp: data.xp, today: today(), purpose: "mood based encouragement" }
           })
         });
-        if (!response.ok) throw new Error("AI service returned " + response.status);
+        if (!response.ok) {
+          const errorBody = await response.text();
+          let errorMessage = errorBody;
+          try {
+            const parsedError = JSON.parse(errorBody);
+            errorMessage = parsedError.detail || parsedError.error || parsedError.message || errorBody;
+            if (typeof errorMessage !== "string") errorMessage = JSON.stringify(errorMessage);
+          } catch {}
+          throw new Error("AI service returned " + response.status + ": " + errorMessage.slice(0, 500));
+        }
         const result = await response.json();
         setMotivation(result.reply || result.message || fallback[mood]);
       } else {
