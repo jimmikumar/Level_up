@@ -8,6 +8,8 @@ import {
   Target, Timer, Trash2, Trophy, Volume2, X, Zap
 } from "lucide-react";
 import "./v3-2.css";
+import V32IntelligencePanel from "./V32IntelligencePanel";
+import { ensureV32History, trackV32Changes, detectMissedSchedules, autoBalanceWorkload, undoSchedule, buildLearningContext } from "./v32-intelligence";
 
 const STORE = "levelup-v3-data";
 const AI_URL = import.meta.env.VITE_AI_ASSISTANT_URL || "";
@@ -183,6 +185,7 @@ export default function LevelUpV3_2() {
   const [loadedUser, setLoadedUser] = useState(null);
   const [sync, setSync] = useState("Checking account");
   const [tab, setTab] = useState("Today");
+  const hiddenAtRef = useRef(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskPriority, setTaskPriority] = useState("P2");
   const [taskDue, setTaskDue] = useState("");
@@ -219,7 +222,7 @@ export default function LevelUpV3_2() {
   const recognitionRef = useRef(null);
   const chatEnd = useRef(null);
 
-  const update = fn => setData(current => fn(current));
+  const update = fn => setData(current => trackV32Changes(current, fn(ensureV32History(current))));
   const todayLog = data.habitLog?.[today()] || [];
   const planSuggestions = useMemo(() => parsePlanTasks(plan), [plan]);
   const openTasks = data.tasks.filter(t => t.status !== "done");
@@ -230,6 +233,7 @@ export default function LevelUpV3_2() {
   const habitRate = data.habits.length ? Math.round(completedHabits / data.habits.length * 100) : 0;
   const goalProgress = data.goals.length ? Math.round(data.goals.reduce((n,g) => n + Number(g.progress || 0), 0) / data.goals.length) : 0;
   const focusToday = data.focusSessions.filter(s => s.date === today()).reduce((n,s) => n + s.minutes, 0);
+  const learningContext = useMemo(() => buildLearningContext(data), [data]);
   const level = Math.floor((data.xp || 0) / 500) + 1;
   const activeGoals = data.goals.filter(g => Number(g.progress || 0) < 100);
   const dateLabel = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
@@ -305,6 +309,36 @@ export default function LevelUpV3_2() {
     }
   }, [focusSeconds, focusRunning, focusMode, focusPreset]);
 
+  useEffect(() => {
+    if (!session?.user?.id || loadedUser !== session.user.id) return;
+    const timer = window.setInterval(() => {
+      setData(current => {
+        const next = detectMissedSchedules(current);
+        return next.activityEvents.length === (current.activityEvents || []).length ? current : next;
+      });
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [session?.user?.id, loadedUser]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden" && focusRunning && focusMode === "focus") {
+        hiddenAtRef.current = new Date().toISOString();
+      } else if (document.visibilityState === "visible" && hiddenAtRef.current) {
+        const startedAt = hiddenAtRef.current;
+        hiddenAtRef.current = null;
+        const seconds = Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000));
+        update(current => ({
+          ...current,
+          distractionEvents: [...(current.distractionEvents || []), { id: uid(), type: "distraction", at: new Date().toISOString(), startedAt, seconds, task: focusTask || "Unassigned focus", source: "app_tab_hidden" }],
+          activityEvents: [...(current.activityEvents || []), { id: uid(), type: "distraction", at: new Date().toISOString(), seconds, task: focusTask || "Unassigned focus" }]
+        }));
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [focusRunning, focusMode, focusTask]);
+
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
 
   const callAI = async (message, purpose) => {
@@ -317,6 +351,10 @@ export default function LevelUpV3_2() {
         context: {
           purpose,
           today: today(),
+          learning: learningContext,
+          recentConversation: purpose === "assistant_chat" ? chat.slice(-10) : undefined,
+          activityHistory: ensureV32History(data).activityEvents.slice(-60),
+          goalProgressHistory: ensureV32History(data).goalProgressHistory.slice(-60),
           tasks: data.tasks,
           goals: data.goals,
           habits: data.habits,
@@ -447,7 +485,7 @@ export default function LevelUpV3_2() {
     setPlanBusy(true);
     try {
       const result = await callAI(
-        `Act as my personal execution coach. Create a realistic plan for ${availableHours} available working hours today. Consider my energy level (${energyLevel}), my actual open tasks, P1 to P4 priorities, deadlines, estimates, scheduled times, habits and goals. Keep Main Outcomes as high level results only, they are not tasks. Under Immediate Action, provide exactly one concrete first task. Under a heading called 5-Hour Time-Blocked Schedule, list only actionable work blocks using this exact format on each line: 07:30-08:20 | 50 min | P1 | Draft the education business outline. Use a real start time, duration in minutes, priority P1 to P4, and a short action title. Do not include breaks, warm-ups, reviews or wrap-ups as tasks. Keep breaks as separate plain text lines. Review yesterday performance included in context, identify unfinished work and avoid repeating an overloaded plan. Give me no more than three main outcomes, then a time blocked schedule that fits within ${availableHours} hours. Respect existing scheduled times and deadlines. Include breaks and one small first action I can start immediately. Do not invent meetings or claim calendar access. Return a concise, well formatted plan with headings.`,
+        `Act as my personal execution coach. Create a realistic plan for ${availableHours} available working hours today. Consider my energy level (${energyLevel}), my actual open tasks, P1 to P4 priorities, deadlines, estimates, scheduled times, habits and goals. Use the supplied 30 day learning context to estimate realistic durations and workload. Learn from recorded completion and missed schedule patterns, but never treat missing records as failures. Avoid repeating overloaded schedules. Keep Main Outcomes as high level results only, they are not tasks. Under Immediate Action, provide exactly one concrete first task. Under a heading called 5-Hour Time-Blocked Schedule, list only actionable work blocks using this exact format on each line: 07:30-08:20 | 50 min | P1 | Draft the education business outline. Use a real start time, duration in minutes, priority P1 to P4, and a short action title. Do not include breaks, warm-ups, reviews or wrap-ups as tasks. Keep breaks as separate plain text lines. Review yesterday performance included in context, identify unfinished work and avoid repeating an overloaded plan. Give me no more than three main outcomes, then a time blocked schedule that fits within ${availableHours} hours. Respect existing scheduled times and deadlines. Include breaks and one small first action I can start immediately. Do not invent meetings or claim calendar access. Return a concise, well formatted plan with headings.`,
         "daily_plan"
       );
       const text = result.reply || "I could not prepare a plan.";
@@ -557,7 +595,7 @@ export default function LevelUpV3_2() {
 
   const nav = [
     ["Today", Target], ["Goals", Goal], ["Tasks", ListTodo], ["Calendar", CalendarDays], ["Habits", CheckCircle2],
-    ["Focus", Timer], ["Insights", BarChart3], ["AI Coach", Bot]
+    ["Focus", Timer], ["Insights", BarChart3], ["Intelligence", Activity], ["AI Coach", Bot]
   ];
   return <div className="v3-app">
     <aside className="v3-sidebar">
@@ -617,10 +655,22 @@ export default function LevelUpV3_2() {
       {tab === "Habits" && <div className="v3-page"><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">CONSISTENCY OVER PERFECTION</span><h3>Your habits</h3></div><span className="v3-count">{completedHabits}/{data.habits.length} today</span></div><form className="v3-form v3-habit-form" onSubmit={addHabit}><input value={habitTitle} onChange={e => setHabitTitle(e.target.value)} placeholder="Add a daily habit..." required/><button type="submit"><Plus size={16}/> Add habit</button></form>{data.habits.map(h => <div className="v3-task-row" key={h.id}><button className={"v3-check " + (todayLog.includes(h.id) ? "checked" : "")} onClick={() => toggleHabit(h.id)}>{todayLog.includes(h.id) ? <Check size={15}/> : <Circle size={18}/>}</button><div className="v3-task-main"><b className={todayLog.includes(h.id) ? "is-done" : ""}>{h.title}</b><small>{(data.habitLog || {})[today()]?.includes(h.id) ? "Completed today" : "Ready when you are"}</small></div><button className="v3-icon-button danger" onClick={() => { if (window.confirm("Remove this habit? Past habit history will remain saved.")) update(d => ({ ...d, habits: d.habits.filter(x => x.id !== h.id) })); }}><Trash2 size={15}/></button></div>)}
         {!data.habits.length && <div className="v3-empty">Start with one habit that supports a goal you care about.</div>}</section></div>}
 
-      {tab === "Focus" && <div className="v3-page v3-focus-page"><section className="v3-focus-card"><span className="v3-kicker">PROTECT YOUR ATTENTION</span><h2>{focusRunning ? "Stay with this task." : "Make space for deep work."}</h2><div className="v3-timer">{elapsed}</div><p>{focusRunning ? "Your focus session is running. Keep this time for one thing." : "Choose a task, put distractions aside and begin."}</p><div className="v32-focus-presets">{[25,50,90].map(minutes=><button key={minutes} className={focusPreset===minutes?"active":""} onClick={()=>setFocusPreset(minutes)} disabled={focusRunning}>{minutes} min</button>)}</div><select value={focusTask} onChange={e => setFocusTask(e.target.value)} disabled={focusRunning}><option value="">Choose a task (optional)</option>{openTasks.map(t => <option key={t.id} value={t.title}>{t.title}</option>)}</select><div className="v3-focus-actions">{!focusRunning ? <><button onClick={() => { setFocusMode("focus"); setFocusSeconds(0); setFocusRunning(true); }}><Timer size={17}/> Start focus</button><button className="secondary" onClick={() => { setFocusMode("break"); setFocusSeconds(0); setFocusRunning(true); }}>Start break</button></> : <><button onClick={finishFocus}><Check size={17}/> Finish and save</button><button className="secondary" onClick={cancelFocus}>Discard</button></>}</div><small>{focusMode==="break"?"Break timer is running.":"Focus time is tracked only while the timer is running. Your preset is "+focusPreset+" minutes."}</small></section><div className="v3-focus-stats"><article><Clock3/><span>Today</span><b>{focusToday} min</b></article><article><Activity/><span>Last 7 days</span><b>{last7Focus} min</b></article><article><Trophy/><span>XP earned</span><b>{data.xp}</b></article></div><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">YOUR RECENT SESSIONS</span><h3>Focus history</h3></div></div>{[...data.focusSessions].reverse().slice(0,10).map(s => <div className="v3-task-row" key={s.id}><span className="v3-session-icon"><Timer size={16}/></span><div className="v3-task-main"><b>{s.task}</b><small>{fmtDate(s.date)}</small></div><strong>{s.minutes} min</strong></div>)}{!data.focusSessions.length && <div className="v3-empty">Your completed focus sessions will appear here.</div>}</section></div>}
+      {tab === "Focus" && <div className="v3-page v3-focus-page"><section className="v3-focus-card"><span className="v3-kicker">PROTECT YOUR ATTENTION</span><h2>{focusRunning ? "Stay with this task." : "Make space for deep work."}</h2><div className="v3-timer">{elapsed}</div><p>{focusRunning ? "Your focus session is running. Keep this time for one thing." : "Choose a task, put distractions aside and begin."}</p><div className="v32-focus-presets">{[25,50,90].map(minutes=><button key={minutes} className={focusPreset===minutes?"active":""} onClick={()=>setFocusPreset(minutes)} disabled={focusRunning}>{minutes} min</button>)}</div><select value={focusTask} onChange={e => setFocusTask(e.target.value)} disabled={focusRunning}><option value="">Choose a task (optional)</option>{openTasks.map(t => <option key={t.id} value={t.title}>{t.title}</option>)}</select><div className="v3-focus-actions">{!focusRunning ? <><button onClick={() => { setFocusMode("focus"); setFocusSeconds(0); setFocusRunning(true); }}><Timer size={17}/> Start focus</button><button className="secondary" onClick={() => { setFocusMode("break"); setFocusSeconds(0); setFocusRunning(true); }}>Start break</button></> : <><button onClick={finishFocus}><Check size={17}/> Finish and save</button><button className="secondary" onClick={cancelFocus}>Discard</button></>}</div><small>{focusMode==="break"?"Break timer is running.":"Focus time is tracked only while the timer is running. Browser tab switches during focus sessions are counted as distractions. Your preset is "+focusPreset+" minutes."}</small></section><div className="v3-focus-stats"><article><Clock3/><span>Today</span><b>{focusToday} min</b></article><article><Activity/><span>Last 7 days</span><b>{last7Focus} min</b></article><article><Trophy/><span>XP earned</span><b>{data.xp}</b></article></div><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">YOUR RECENT SESSIONS</span><h3>Focus history</h3></div></div>{[...data.focusSessions].reverse().slice(0,10).map(s => <div className="v3-task-row" key={s.id}><span className="v3-session-icon"><Timer size={16}/></span><div className="v3-task-main"><b>{s.task}</b><small>{fmtDate(s.date)}</small></div><strong>{s.minutes} min</strong></div>)}{!data.focusSessions.length && <div className="v3-empty">Your completed focus sessions will appear here.</div>}</section></div>}
 
       {tab === "Insights" && <div className="v3-page"><section className="v3-metrics v3-insight-metrics"><article><span><CheckCircle2/></span><small>PRODUCTIVITY SCORE</small><b>{productivityScore}%</b><p>Based on tasks, habits and focus</p></article><article><span><Flame/></span><small>HABIT RATE TODAY</small><b>{habitRate}%</b><p>{completedHabits} habits complete</p></article><article><span><Clock3/></span><small>FOCUS LAST 7 DAYS</small><b>{last7Focus}<em> min</em></b><p>Tracked focus time</p></article><article><span><Target/></span><small>GOAL PROGRESS</small><b>{goalProgress}%</b><p>{data.goals.length} goals tracked</p></article></section><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">RECENT CONSISTENCY</span><h3>Habit activity, last 7 days</h3></div></div><div className="v3-week-bars">{last7.map(d => <div key={d.key}><div className="v3-bar"><i style={{ height: (data.habits.length ? d.count / data.habits.length * 100 : 0) + "%" }}/></div><b>{d.count}</b><small>{d.label}</small></div>)}</div></section><div className="v3-two-col"><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">ACCOUNTABILITY</span><h3>Weekly review</h3></div></div><p className="v3-muted">Look at what moved forward, what slipped and what deserves attention next week.</p><button className="v3-primary" onClick={() => makeReview("weekly")} disabled={reviewBusy}><Sparkles size={15}/>{reviewBusy ? "Preparing…" : "Generate weekly review"}</button>{review && <div className="v3-ai-text v3-review-text">{review}</div>}</section><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">WHAT NEEDS ATTENTION</span><h3>Execution signals</h3></div></div><p>{highTasks.length} high priority tasks are still open.</p><p>{activeGoals.filter(g => g.deadline && g.deadline < today()).length} active goals have passed their target date.</p><p>{data.tasks.filter(t => t.status !== "done" && t.dueDate && t.dueDate < today()).length} tasks are overdue.</p><p>{staleTasks.length} open tasks have been waiting for more than seven days.</p><p>{productivityScore}% is your current productivity score.</p></section></div></div>}
 
+      {tab === "Intelligence" && <V32IntelligencePanel data={data}
+        onBalance={() => {
+          const result = autoBalanceWorkload(data);
+          if (!result.moved) { setNotice("There are no unscheduled or overdue tasks to balance."); return; }
+          setData(result.data);
+          setNotice(result.moved + " tasks automatically scheduled. You can undo this change from Intelligence.");
+        }}
+        onUndo={() => {
+          setData(current => undoSchedule(current));
+          setNotice("The most recent automatic schedule change was undone.");
+        }}
+      />}
       {tab === "AI Coach" && <div className="v3-page v3-coach-page"><section className="v3-coach-intro"><div className="v3-coach-icon"><Bot size={26}/></div><div><span className="v3-kicker">YOUR PERSONAL EXECUTION COACH</span><h2>Think clearly. Choose the next step.</h2><p>Your coach can use your current tasks, goals, habits and focus history as context.</p></div></section><section className="v3-chat-panel"><div className="v3-chat-messages">{chat.map((m,i) => <div className={"v3-chat-message " + m.role} key={i}><span>{m.role === "assistant" ? <Bot size={15}/> : "You"}</span><div className="v3-chat-message-content"><FormattedAIText text={m.text} /></div></div>)}{chatBusy && <div className="v3-chat-message assistant"><span><Bot size={15}/></span><p>Thinking…</p></div>}<div ref={chatEnd}/></div><form className="v3-chat-composer" onSubmit={e => { e.preventDefault(); sendChat(); }}><button type="button" onClick={startVoice} title="Voice input"><Mic size={17}/></button><input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={voiceOn ? "Listening…" : "Ask about your goals, tasks or today's plan…"}/><button type="submit" disabled={!chatInput.trim() || chatBusy}><Send size={17}/></button></form><div className="v3-chat-suggestions">{["What should I focus on today?","Break my biggest goal into milestones","Review my unfinished tasks","Help me plan a realistic week"].map(s => <button key={s} onClick={() => sendChat(s)}>{s}</button>)}</div></section></div>}
       <footer className="v3-footer">LevelUp V3.2 <span>Plan with purpose. Execute with focus.</span></footer>
     </main>
