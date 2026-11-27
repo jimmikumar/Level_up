@@ -52,11 +52,67 @@ const priorityRank = { P1: 0, P2: 1, P3: 2, P4: 3, High: 0, Medium: 1, Low: 2 };
 const fmtDate = value => value ? new Date(value + "T12:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "No deadline";
 const safeText = value => String(value || "").trim();
 
-function getPlanSuggestions(text) {
-  return [...new Set(String(text || "").split(/\r?\n/).map(line => line.trim())
-    .filter(line => /^([-*+]\s+|\d+[.)]\s+|\d{1,2}(:\d{2})?\s*(AM|PM)?\s*[:|])/i.test(line))
-    .map(line => line.replace(/^([-*+]\s+|\d+[.)]\s+)/, "").replace(/^\d{1,2}(:\d{2})?\s*(AM|PM)?\s*[:|]\s*/i, "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim())
-    .filter(line => line.length >= 8 && !/^(main outcomes|schedule|breaks|first action|priority|today's plan)/i.test(line)))];
+function parsePlanTasks(text) {
+  const results = [];
+  let section = "";
+  const clean = value => String(value || "").replace(/\\\\([-*+])/g, "$1").replace(/\\*\\*/g, "").replace(/&nbsp;/g, " ").replace(/\\s+/g, " ").trim();
+  const toTime = value => {
+    const match = String(value || "").match(/^(\\d{1,2}):(\\d{2})\\s*(AM|PM)?$/i);
+    if (!match) return "";
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const meridiem = (match[3] || "").toUpperCase();
+    if (meridiem === "PM" && hour < 12) hour += 12;
+    if (meridiem === "AM" && hour === 12) hour = 0;
+    return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+  };
+  const add = (title, details = {}) => {
+    const name = clean(title).replace(/^[:|,]+/, "").replace(/[.;]+$/, "").trim();
+    if (!name || name.length < 5 || /^(break|short break|wrap[- ]?up|light warm[- ]?up)$/i.test(name)) return;
+    if (!results.some(item => item.title.toLowerCase() === name.toLowerCase())) {
+      results.push({ title: name, priority: details.priority || "P2", estimate: details.estimate || 30, scheduledTime: details.scheduledTime || "", scheduledDate: details.scheduledTime ? today() : "" });
+    }
+  };
+  String(text || "").split(/\\r?\\n/).forEach(raw => {
+    const line = clean(raw);
+    if (!line) return;
+    const heading = line.replace(/^#+\\s*/, "").replace(/[*_]/g, "").replace(/:$/, "").toLowerCase();
+    if (/^(main outcomes|key outcomes|outcomes)$/.test(heading)) { section = "outcomes"; return; }
+    if (/^(immediate action|first action|start here)$/.test(heading)) { section = "immediate"; return; }
+    if (/(schedule|time.blocked|time blocked)/.test(heading)) { section = "schedule"; return; }
+    if (/^(breaks|notes|stay flexible|tips)$/.test(heading)) { section = "ignore"; return; }
+    const time = line.match(/(\\d{1,2}:\\d{2}\\s*(?:AM|PM)?)\\s*[‐‑‒–—-]\\s*(\\d{1,2}:\\d{2}\\s*(?:AM|PM)?)/i);
+    if (time) {
+      const rangeEnd = time.index + time[0].length;
+      let rest = line.slice(rangeEnd).replace(/^\\s*[|:–—-]?\\s*/, "");
+      const pipeParts = rest.split(/\\s*\\|\\s*/);
+      let priority = (rest.match(/\\bP([1-4])\\b/i) || [])[0];
+      let estimateMatch = rest.match(/\\((\\d{1,3})\\s*(?:min|minutes?)\\)/i) || rest.match(/\\b(\\d{1,3})\\s*(?:min|minutes?)\\b/i);
+      let title = pipeParts.length >= 3 ? pipeParts.slice(3).join(" ") : rest;
+      if (pipeParts.length >= 3) {
+        estimateMatch = estimateMatch || pipeParts[0].match(/(\\d{1,3})/);
+        priority = priority || pipeParts[1];
+      }
+      title = title.replace(/^\\(?\\d{1,3}\\s*(?:min|minutes?)\\)?\\s*[:|–—-]?\\s*/i, "");
+      title = title.replace(/^P[1-4]\\s*[:|,]?\\s*/i, "");
+      title = title.replace(/^(?:warm[- ]?up|focus session \\d+|deep work|work block|session \\d+)\\s*[:|,–—-]+\\s*/i, "");
+      title = title.replace(/\\s*\\((?:goal|outcome)\\s*\\d+\\)\\s*$/i, "");
+      if (/^(break|short break|wrap[- ]?up|light warm[- ]?up|review progress)/i.test(title)) return;
+      const start = toTime(time[1]);
+      const end = toTime(time[2]);
+      let duration = estimateMatch ? Number(estimateMatch[1]) : 0;
+      if (!duration && start && end) {
+        const [sh, sm] = start.split(":").map(Number), [eh, em] = end.split(":").map(Number);
+        duration = Math.max(5, eh * 60 + em - sh * 60 - sm);
+      }
+      add(title, { scheduledTime: start, estimate: duration || 30, priority: priority && /^P[1-4]$/i.test(priority) ? priority.toUpperCase() : "P2" });
+      return;
+    }
+    if (section === "immediate" && /^([-*+]\\s+|\\d+[.)]\\s+)/.test(line)) {
+      add(line.replace(/^([-*+]\\s+|\\d+[.)]\\s+)/, ""), { estimate: 30, priority: "P2" });
+    }
+  });
+  return results;
 }
 
 function renderInlineAI(text, prefix) {
@@ -164,7 +220,7 @@ export default function LevelUpV3_2() {
 
   const update = fn => setData(current => fn(current));
   const todayLog = data.habitLog?.[today()] || [];
-  const planSuggestions = useMemo(() => getPlanSuggestions(plan), [plan]);
+  const planSuggestions = useMemo(() => parsePlanTasks(plan), [plan]);
   const openTasks = data.tasks.filter(t => t.status !== "done");
   const doneTasks = data.tasks.filter(t => t.status === "done");
   const todayTasks = openTasks.filter(t => !t.dueDate || t.dueDate <= today()).sort((a,b) => priorityRank[a.priority || "P2"] - priorityRank[b.priority || "P2"]);
@@ -290,19 +346,20 @@ export default function LevelUpV3_2() {
     update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), title, priority: taskPriority, dueDate: taskDue, scheduledDate: taskScheduledDate || "", scheduledTime: taskScheduledTime || "", goalId: taskGoal || null, estimate: Math.max(5, Number(taskEstimate) || 30), status: "todo", createdAt: new Date().toISOString() }] }));
     setTaskTitle(""); setTaskDue(""); setTaskGoal(""); setTaskPriority("P2"); setTaskEstimate("30"); setTaskScheduledDate(today()); setTaskScheduledTime("");
   }
-  function addPlanSuggestion(title) {
-    const clean = safeText(title);
+  function addPlanSuggestion(suggestion) {
+    const item = typeof suggestion === "string" ? { title: suggestion } : suggestion;
+    const clean = safeText(item.title);
     if (!clean || data.tasks.some(t => t.title.toLowerCase() === clean.toLowerCase())) { setNotice("This suggestion is already in your task list."); return; }
-    update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), title: clean, priority: "P2", dueDate: "", scheduledDate: today(), scheduledTime: "", goalId: null, estimate: 30, status: "todo", source: "AI plan", createdAt: new Date().toISOString() }] }));
+    update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), title: clean, priority: item.priority || "P2", dueDate: "", scheduledDate: item.scheduledDate || "", scheduledTime: item.scheduledTime || "", goalId: null, estimate: Math.max(5, Number(item.estimate) || 30), status: "todo", source: "AI plan", createdAt: new Date().toISOString() }] }));
     setAddedPlanItems(items => [...items, clean]);
     setNotice("Added to your task list: " + clean);
   }
   function addAllPlanSuggestions() {
     const existing = new Set(data.tasks.map(t => t.title.toLowerCase()));
-    const fresh = planSuggestions.filter(title => !existing.has(title.toLowerCase()) && !addedPlanItems.includes(title));
+    const fresh = planSuggestions.filter(item => !existing.has(item.title.toLowerCase()) && !addedPlanItems.includes(item.title));
     if (!fresh.length) { setNotice("All suggested actions are already in your task list."); return; }
-    update(d => ({ ...d, tasks: [...d.tasks, ...fresh.map(title => ({ id: uid(), title, priority: "P2", dueDate: "", scheduledDate: today(), scheduledTime: "", goalId: null, estimate: 30, status: "todo", source: "AI plan", createdAt: new Date().toISOString() }))] }));
-    setAddedPlanItems(items => [...items, ...fresh]);
+    update(d => ({ ...d, tasks: [...d.tasks, ...fresh.map(item => ({ id: uid(), title: item.title, priority: item.priority || "P2", dueDate: "", scheduledDate: item.scheduledDate || "", scheduledTime: item.scheduledTime || "", goalId: null, estimate: Math.max(5, Number(item.estimate) || 30), status: "todo", source: "AI plan", createdAt: new Date().toISOString() }))] }));
+    setAddedPlanItems(items => [...items, ...fresh.map(item => item.title)]);
     setNotice(fresh.length + " AI suggestions added as tasks.");
   }
   function addGoal(event) {
@@ -389,7 +446,7 @@ export default function LevelUpV3_2() {
     setPlanBusy(true);
     try {
       const result = await callAI(
-        `Act as my personal execution coach. Create a realistic plan for ${availableHours} available working hours today. Consider my energy level (${energyLevel}), my actual open tasks, P1 to P4 priorities, deadlines, estimates, scheduled times, habits and goals. Make every actionable step a numbered or bulleted item so I can add individual suggestions to my task list. Review yesterday performance included in context, identify unfinished work and avoid repeating an overloaded plan. Give me no more than three main outcomes, then a time blocked schedule that fits within ${availableHours} hours. Respect existing scheduled times and deadlines. Include breaks and one small first action I can start immediately. Do not invent meetings or claim calendar access. Return a concise, well formatted plan with headings.`,
+        `Act as my personal execution coach. Create a realistic plan for ${availableHours} available working hours today. Consider my energy level (${energyLevel}), my actual open tasks, P1 to P4 priorities, deadlines, estimates, scheduled times, habits and goals. Keep Main Outcomes as high level results only, they are not tasks. Under Immediate Action, provide exactly one concrete first task. Under a heading called 5-Hour Time-Blocked Schedule, list only actionable work blocks using this exact format on each line: 07:30-08:20 | 50 min | P1 | Draft the education business outline. Use a real start time, duration in minutes, priority P1 to P4, and a short action title. Do not include breaks, warm-ups, reviews or wrap-ups as tasks. Keep breaks as separate plain text lines. Review yesterday performance included in context, identify unfinished work and avoid repeating an overloaded plan. Give me no more than three main outcomes, then a time blocked schedule that fits within ${availableHours} hours. Respect existing scheduled times and deadlines. Include breaks and one small first action I can start immediately. Do not invent meetings or claim calendar access. Return a concise, well formatted plan with headings.`,
         "daily_plan"
       );
       const text = result.reply || "I could not prepare a plan.";
@@ -520,7 +577,7 @@ export default function LevelUpV3_2() {
           <article><span><Clock3/></span><small>FOCUS TIME TODAY</small><b>{focusToday}<em> min</em></b><p>{data.focusSessions.filter(s => s.date === today()).length} sessions</p></article>
           <article><span><Target/></span><small>GOAL PROGRESS</small><b>{goalProgress}%</b><p>{activeGoals.length} active goals</p></article>
         </section>
-        {plan && <section className="v3-panel v3-plan"><div className="v3-panel-heading"><div><span className="v3-kicker">YOUR AI GENERATED PLAN</span><h3>Today's game plan</h3></div><button className="v3-icon-button" onClick={() => setPlan("")}><X size={16}/></button></div><div className="v3-ai-text"><FormattedAIText text={plan} /></div>{planSuggestions.length>0&&<div className="v32-plan-actions"><div><b>Turn suggestions into tasks</b><button className="v3-primary" onClick={addAllPlanSuggestions}>Add all as tasks</button></div>{planSuggestions.map((item,index)=><div className="v32-plan-item" key={index}><span>{item}</span><button onClick={()=>addPlanSuggestion(item)} disabled={addedPlanItems.includes(item)||data.tasks.some(t=>t.title.toLowerCase()===item.toLowerCase())}>{addedPlanItems.includes(item)||data.tasks.some(t=>t.title.toLowerCase()===item.toLowerCase())?"Added":"Add as task"}</button></div>)}</div>}</section>}
+        {plan && <section className="v3-panel v3-plan"><div className="v3-panel-heading"><div><span className="v3-kicker">YOUR AI GENERATED PLAN</span><h3>Today's game plan</h3></div><button className="v3-icon-button" onClick={() => setPlan("")}><X size={16}/></button></div><div className="v3-ai-text"><FormattedAIText text={plan} /></div>{planSuggestions.length>0&&<div className="v32-plan-actions"><div><b>Actionable tasks from your plan</b><button className="v3-primary" onClick={addAllPlanSuggestions}>Add all as tasks</button></div>{planSuggestions.map((item,index)=>{const alreadyAdded=addedPlanItems.includes(item.title)||data.tasks.some(t=>t.title.toLowerCase()===item.title.toLowerCase());return <div className="v32-plan-item" key={index}><span><b>{item.title}</b><small>{item.scheduledTime ? "Today at "+item.scheduledTime+" · " : ""}{item.estimate} min · {item.priority}</small></span><button onClick={()=>addPlanSuggestion(item)} disabled={alreadyAdded}>{alreadyAdded?"Added":"Add as task"}</button></div>})}</div>}</section>}
         {nextBestAction&&<section className="v3-panel v32-next-action"><span className="v3-kicker">YOUR NEXT BEST ACTION</span><h3>{nextBestAction.title}</h3><p>{nextBestAction.priority||"P2"} priority, {nextBestAction.estimate||30} minutes estimated. {nextBestAction.dueDate?"Due "+fmtDate(nextBestAction.dueDate):"No deadline set."}</p><button onClick={()=>toggleTask(nextBestAction.id)}>Mark complete</button><button className="v3-text-button" onClick={()=>setTab("Tasks")}>View task list</button></section>}
         <div className="v3-two-col">
           <section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">DO THE IMPORTANT THINGS FIRST</span><h3>Today's priorities</h3></div><button className="v3-text-button" onClick={() => setTab("Tasks")}>All tasks <ArrowRight size={14}/></button></div>
