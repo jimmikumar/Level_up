@@ -265,7 +265,10 @@ export default function LevelUpV3_2() {
         setLoadedUser(id);
         return;
       }
-      if (row?.progress && typeof row.progress === "object") setData({ ...readLocal(), ...row.progress, tasks: (row.progress.tasks || readLocal().tasks || []).map(t => ({ ...t, priority: ({ High: "P1", Medium: "P2", Low: "P3" })[t.priority] || t.priority || "P2" })) });
+      if (row?.progress && typeof row.progress === "object") {
+        setData({ ...readLocal(), ...row.progress, tasks: (row.progress.tasks || readLocal().tasks || []).map(t => ({ ...t, priority: ({ High: "P1", Medium: "P2", Low: "P3" })[t.priority] || t.priority || "P2" })) });
+        if (Array.isArray(row.progress.coachConversation) && row.progress.coachConversation.length) setChat(row.progress.coachConversation);
+      }
       setLoadedUser(id);
       setSync("Cloud ready");
     }
@@ -671,7 +674,7 @@ export default function LevelUpV3_2() {
 
       {tab === "Insights" && <div className="v3-page"><section className="v3-metrics v3-insight-metrics"><article><span><CheckCircle2/></span><small>PRODUCTIVITY SCORE</small><b>{productivityScore}%</b><p>Based on tasks, habits and focus</p></article><article><span><Flame/></span><small>HABIT RATE TODAY</small><b>{habitRate}%</b><p>{completedHabits} habits complete</p></article><article><span><Clock3/></span><small>FOCUS LAST 7 DAYS</small><b>{last7Focus}<em> min</em></b><p>Tracked focus time</p></article><article><span><Target/></span><small>GOAL PROGRESS</small><b>{goalProgress}%</b><p>{data.goals.length} goals tracked</p></article></section><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">RECENT CONSISTENCY</span><h3>Habit activity, last 7 days</h3></div></div><div className="v3-week-bars">{last7.map(d => <div key={d.key}><div className="v3-bar"><i style={{ height: (data.habits.length ? d.count / data.habits.length * 100 : 0) + "%" }}/></div><b>{d.count}</b><small>{d.label}</small></div>)}</div></section><div className="v3-two-col"><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">ACCOUNTABILITY</span><h3>Weekly review</h3></div></div><p className="v3-muted">Look at what moved forward, what slipped and what deserves attention next week.</p><button className="v3-primary" onClick={() => makeReview("weekly")} disabled={reviewBusy}><Sparkles size={15}/>{reviewBusy ? "Preparing…" : "Generate weekly review"}</button>{review && <div className="v3-ai-text v3-review-text">{review}</div>}</section><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">WHAT NEEDS ATTENTION</span><h3>Execution signals</h3></div></div><p>{highTasks.length} high priority tasks are still open.</p><p>{activeGoals.filter(g => g.deadline && g.deadline < today()).length} active goals have passed their target date.</p><p>{data.tasks.filter(t => t.status !== "done" && t.dueDate && t.dueDate < today()).length} tasks are overdue.</p><p>{staleTasks.length} open tasks have been waiting for more than seven days.</p><p>{productivityScore}% is your current productivity score.</p></section></div></div>}
 
-      {tab === "Intelligence" && <V32IntelligencePanel data={data}
+      {tab === "Intelligence" && <V32IntelligencePanel data={data} onWeeklyReport={() => makeReview("weekly")} report={review} reportBusy={reviewBusy}
         onBalance={() => {
           const result = autoBalanceWorkload(data);
           if (!result.moved) { setNotice("There are no unscheduled or overdue tasks to balance."); return; }
