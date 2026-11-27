@@ -68,7 +68,7 @@ export function detectMissedSchedules(value,now=new Date()){
 }
 
 export function autoBalanceWorkload(value){
- const data=ensureV32History(value),tasks=[...ensureV32History(value).tasks],candidates=tasks.filter(t=>t.status!=="done"&&(!t.scheduledDate||t.scheduledDate<dayKey()));
+ const data=ensureV32History(value),tasks=[...ensureV32History(value).tasks],candidates=tasks.filter(t=>t.status!=="done"&&(!t.scheduledDate||t.scheduledDate<dayKey()||!t.scheduledTime||(t.dueDate&&t.dueDate<dayKey())));
  if(!candidates.length)return {data,moved:0};
  const snapshot=candidates.map(t=>({taskId:t.id,scheduledDate:t.scheduledDate||"",scheduledTime:t.scheduledTime||""}));
  const fixed=tasks.filter(t=>t.status!=="done"&&t.scheduledDate&&t.scheduledTime&&!candidates.some(c=>String(c.id)===String(t.id)));
