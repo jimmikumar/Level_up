@@ -88,7 +88,7 @@ function parsePlanTasks(text) {
       const pipeParts = rest.split(/\s*\|\s*/);
       let priority = (rest.match(/\bP([1-4])\b/i) || [])[0];
       let estimateMatch = rest.match(/\((\d{1,3})\s*(?:min|minutes?)\)/i) || rest.match(/\b(\d{1,3})\s*(?:min|minutes?)\b/i);
-      if (/^(?:break|short break|wrap[- ]?up|light warm[- ]?up|warm[- ]?up|review progress)/i.test(rest)) return;
+      if (/\\b(?:break|short break|wrap[- ]?up|light warm[- ]?up|warm[- ]?up|review progress)\\b/i.test(rest)) return;
       let title = pipeParts.length >= 3 ? pipeParts.slice(2).join(" ") : rest;
       if (pipeParts.length >= 3) {
         estimateMatch = estimateMatch || pipeParts[0].match(/(\d{1,3})/);
