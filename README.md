@@ -72,3 +72,19 @@ V3 and V3.1 are preserved in their own source files and use the V3 Supabase prog
 V3.2 adds a compact version selector, AI plan suggestions that can be added individually or in bulk as tasks, day, week and month calendar views with drag and drop rescheduling, schedule conflict warnings, overdue task catch up scheduling that preserves original deadlines, energy aware AI planning, a next best action panel, goal health signals, productivity scoring, stale task signals, focus presets and break timing, and expanded AI Coach task actions.
 
 V3.2 intentionally reuses the existing levelup-v3-data local storage key and user_progress_v3 Supabase table. This keeps existing V3 progress available without a new database migration. V1, V2, V3 and V3.1 remain selectable.
+
+
+### V3.2 intelligence improvements
+V3.2 includes the six phase intelligence upgrade within the existing V3.2 version:
+- Automatic activity history for task creation, completion, reopening, deletion, rescheduling, habit completion, goal progress, focus sessions and AI plans.
+- Missed schedule detection while the app is open.
+- Historical focus duration records and planned versus actual task time reporting.
+- AI planning context based on recent completion, missed schedule and focus history.
+- Automatic time conflict resolution when a task schedule is changed, with an undo history.
+- Workload balancing for unscheduled and overdue tasks.
+- Contextual AI Coach conversations using recent chat and activity history.
+- Goal completion forecasts based on recorded progress changes, with a needs more data state when history is insufficient.
+- Weekly task completion, focus, missed schedule and distraction trends.
+- Focus distraction tracking when the browser tab is hidden during an active focus session. LevelUp does not monitor other applications.
+
+The intelligence history is stored as additional fields inside the existing V3 JSON progress record and the existing `levelup-v3-data` local storage object. No existing Supabase columns or tables are changed. Existing V3 data is retained and new history starts accumulating after the V3.2 intelligence upgrade is used. V1, V2, V3 and V3.1 remain unchanged and selectable.
