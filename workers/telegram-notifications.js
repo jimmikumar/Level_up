@@ -3,6 +3,7 @@
  *
  * Required Worker secrets:
  * TELEGRAM_BOT_TOKEN
+ * TELEGRAM_WEBHOOK_SECRET (a random string, 32+ characters)
  * SUPABASE_URL
  * SUPABASE_SERVICE_ROLE_KEY
  *
@@ -92,6 +93,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/telegram/webhook" && request.method === "POST") {
+      if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TELEGRAM_WEBHOOK_SECRET) return json({ error: "Unauthorized" }, 401);
       try { return await handleWebhook(request, env); }
       catch (error) { return json({ error: error.message }, 500); }
     }
