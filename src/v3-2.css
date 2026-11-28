@@ -109,3 +109,32 @@
 .v32-whatif-result{display:grid;gap:6px;margin-top:14px;padding:13px;border-radius:9px;background:#131e31}
 .v32-whatif-result b{font-size:20px;color:#c7b7ff}.v32-whatif-result span{font-size:9px;color:var(--v3-muted);line-height:1.5}
 @media(max-width:700px){.v32-recommendation{align-items:flex-start;flex-direction:column}.v32-recommendation button{white-space:normal}}
+
+
+/* V3.2 visual refresh, life areas, themes and settings */
+.v3-app[data-theme="light"]{--v3-bg:#f3f5fb;--v3-panel:#ffffff;--v3-panel2:#edf1f8;--v3-border:#d8deeb;--v3-text:#172033;--v3-muted:#64748b;--v3-accent:#7154d8;--v3-green:#16845e;color:var(--v3-text);background:var(--v3-bg)}
+.v3-app[data-theme="midnight"]{--v3-bg:#050816;--v3-panel:#0b1024;--v3-panel2:#121a35;--v3-border:#26345c;--v3-text:#e9edff;--v3-muted:#9aa8c8;--v3-accent:#7c9cff;--v3-green:#54d6b0}
+.v3-app[data-theme="forest"]{--v3-bg:#081711;--v3-panel:#10251c;--v3-panel2:#173326;--v3-border:#2a5140;--v3-text:#e5f5e9;--v3-muted:#9db8a6;--v3-accent:#70c995;--v3-green:#70d5a0}
+.v3-app[data-theme="light"] .v3-sidebar,.v3-app[data-theme="light"] .v3-topbar{background:#fff;border-color:var(--v3-border)}
+.v3-app[data-theme="light"] .v3-panel,.v3-app[data-theme="light"] .v3-goal-card,.v3-app[data-theme="light"] .v3-calendar-day,.v3-app[data-theme="light"] .v32-intel-metrics article{background:#fff;color:var(--v3-text)}
+.v3-app[data-theme="light"] .v3-task-row,.v3-app[data-theme="light"] .v3-chat-panel,.v3-app[data-theme="light"] .v3-chat-message p,.v3-app[data-theme="light"] .v32-calendar-task,.v3-app[data-theme="light"] .v32-recommendation{background:#f0f3f9;color:var(--v3-text)}
+.v3-app[data-theme="light"] .v3-form input,.v3-app[data-theme="light"] .v3-form select,.v3-app[data-theme="light"] .v3-focus-card select,.v3-app[data-theme="light"] .v3-chat-composer input,.v3-app[data-theme="light"] .v32-settings-grid select{background:#fff;color:#172033}
+.v3-app[data-theme="light"] .v3-brand,.v3-app[data-theme="light"] .v3-sidebar nav button,.v3-app[data-theme="light"] .v3-topbar h1,.v3-app[data-theme="light"] .v3-task-main b,.v3-app[data-theme="light"] .v3-goal-card h4{color:#172033}
+.v3-app[data-theme="light"] .v3-welcome{background:linear-gradient(115deg,#e8eaff,#f5edff);color:#172033}
+.v3-app[data-theme="light"] .v3-welcome p,.v3-app[data-theme="light"] .v3-welcome .v3-kicker{color:#58617a}
+.v32-life-chart{height:360px;width:100%;margin:8px auto}
+.v32-life-average{display:flex;align-items:center;gap:9px;padding:13px;background:var(--v3-panel2);border-radius:9px;color:var(--v3-muted);font-size:11px}
+.v32-life-average b{margin-left:auto;color:var(--v3-text);font-size:19px}
+.v32-life-ratings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:15px 0}
+.v32-life-ratings label{display:grid;grid-template-columns:1fr auto;gap:8px;padding:12px;background:var(--v3-panel2);border:1px solid var(--v3-border);border-radius:9px}
+.v32-life-ratings label span{font-size:11px;font-weight:700}
+.v32-life-ratings input{grid-column:1/-1;width:100%;accent-color:var(--v3-accent)}
+.v32-life-ratings b{font-size:10px;color:var(--v3-muted)}
+.v32-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}
+.v32-settings-grid label{display:grid;gap:9px;padding:15px;background:var(--v3-panel2);border:1px solid var(--v3-border);border-radius:10px}
+.v32-settings-grid label span{font-size:12px;font-weight:700}
+.v32-settings-grid select{height:40px;border:1px solid var(--v3-border);border-radius:8px;background:#0c1423;color:var(--v3-text);padding:0 10px}
+.v32-settings-grid small{font-size:10px;color:var(--v3-muted);line-height:1.5}
+.v32-telegram-link{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:15px 0;padding:12px;background:var(--v3-panel2);border-radius:9px}
+.v32-telegram-link code{font-size:15px;letter-spacing:2px;color:var(--v3-text)}
+@media(max-width:700px){.v32-life-ratings,.v32-settings-grid{grid-template-columns:1fr}.v32-life-chart{height:300px}.v32-telegram-link{align-items:flex-start;flex-direction:column}}

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import "./v3-2.css";
 import V32IntelligencePanel from "./V32IntelligencePanel";
+import LifeAreasPanel from "./LifeAreasPanel";
 import { ensureV32History, trackV32Changes, detectMissedSchedules, autoBalanceWorkload, undoSchedule, buildLearningContext } from "./v32-intelligence";
 
 const STORE = "levelup-v3-data";
@@ -180,6 +181,9 @@ function FormattedAIText({ text }) {
 
 export default function LevelUpV3_2() {
   const [data, setData] = useState(readLocal);
+  const language = data.settings?.language || "en";
+  const theme = data.settings?.theme || "dark";
+  const tr = (en, hi) => language === "hi" ? hi : en;
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [loadedUser, setLoadedUser] = useState(null);
@@ -223,6 +227,7 @@ export default function LevelUpV3_2() {
   const chatEnd = useRef(null);
 
   const update = fn => setData(current => trackV32Changes(current, fn(ensureV32History(current))));
+  useEffect(() => { document.documentElement.dataset.levelupTheme = theme; }, [theme]);
   const todayLog = data.habitLog?.[today()] || [];
   const planSuggestions = useMemo(() => parsePlanTasks(plan), [plan]);
   const openTasks = data.tasks.filter(t => t.status !== "done");
@@ -354,6 +359,8 @@ export default function LevelUpV3_2() {
         message,
         context: {
           purpose,
+          responseLanguage: language === "hi" ? "Hindi" : "English",
+          languageInstruction: language === "hi" ? "Respond in natural Hindi. Keep task titles and technical terms understandable. Use Hindi for all explanations." : "Respond in English.",
           today: today(),
           learning: learningContext,
           recentConversation: purpose === "assistant_chat" ? chat.slice(-12) : undefined,
@@ -564,7 +571,7 @@ export default function LevelUpV3_2() {
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Speech) { setNotice("Voice input is not supported in this browser. Try Chrome or Edge."); return; }
     const recognition = new Speech();
-    recognition.lang = "en-IN";
+    recognition.lang = language === "hi" ? "hi-IN" : "en-IN";
     recognition.interimResults = false;
     recognition.onresult = e => { setVoiceOn(false); sendChat(e.results[0][0].transcript); };
     recognition.onerror = () => { setVoiceOn(false); setNotice("Microphone permission is required for voice input."); };
@@ -609,13 +616,14 @@ export default function LevelUpV3_2() {
 
   const nav = [
     ["Today", Target], ["Goals", Goal], ["Tasks", ListTodo], ["Calendar", CalendarDays], ["Habits", CheckCircle2],
-    ["Focus", Timer], ["Insights", BarChart3], ["Intelligence", Activity], ["AI Coach", Bot]
+    ["Focus", Timer], ["Insights", BarChart3], ["Life Areas", Heart], ["Intelligence", Activity], ["AI Coach", Bot], ["Settings", Settings]
   ];
+  const navLabel = name => language === "hi" ? ({ Today: "आज", Goals: "लक्ष्य", Tasks: "कार्य", Calendar: "कैलेंडर", Habits: "आदतें", Focus: "फोकस", Insights: "विश्लेषण", "Life Areas": "जीवन क्षेत्र", Intelligence: "इंटेलिजेंस", "AI Coach": "AI कोच", Settings: "सेटिंग्स" })[name] : name;
   return <div className="v3-app">
     <aside className="v3-sidebar">
       <div className="v3-brand"><span><Zap size={20} fill="currentColor"/></span><b>LevelUp</b><small>V3.2</small></div>
       <div className="v3-side-label">YOUR WORKSPACE</div>
-      <nav>{nav.map(([name, Icon]) => <button key={name} className={tab === name ? "active" : ""} onClick={() => setTab(name)}><Icon size={17}/>{name}{name === "Tasks" && <i>{openTasks.length}</i>}</button>)}</nav>
+      <nav>{nav.map(([name, Icon]) => <button key={name} className={tab === name ? "active" : ""} onClick={() => setTab(name)}><Icon size={17}/>{navLabel(name)}{name === "Tasks" && <i>{openTasks.length}</i>}</button>)}</nav>
       <div className="v3-side-bottom"><div className="v3-level-card"><span>YOUR LEVEL</span><b>LEVEL {level}</b><div className="v3-level-track"><i style={{ width: ((data.xp % 500) / 5) + "%" }}/></div><small>{data.xp % 500} / 500 XP</small></div><p><span className="v3-sync-dot"/>{sync}</p><button onClick={async () => { await supabase.auth.signOut(); }}><Settings size={15}/> Account and sign out</button></div>
     </aside>
     <main className="v3-main">
@@ -685,6 +693,8 @@ export default function LevelUpV3_2() {
           setNotice("The most recent automatic schedule change was undone.");
         }}
       />}
+      {tab === "Life Areas" && <LifeAreasPanel areas={data.lifeAreas} language={language} onChange={areas => update(d => ({ ...d, lifeAreas: areas }))} />}
+      {tab === "Settings" && <div className="v3-page"><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">{tr("PERSONALISE YOUR WORKSPACE","अपने वर्कस्पेस को अपनी पसंद के अनुसार बनाएं")}</span><h3>{tr("Settings","सेटिंग्स")}</h3></div><Settings size={19}/></div><div className="v32-settings-grid"><label><span>{tr("Language","भाषा")}</span><select value={language} onChange={e => update(d => ({ ...d, settings: { ...d.settings, language: e.target.value } }))}><option value="en">English</option><option value="hi">हिन्दी</option></select><small>{tr("The AI Coach will also reply in your selected language.","AI कोच भी चुनी गई भाषा में जवाब देगा।")}</small></label><label><span>{tr("Appearance","थीम")}</span><select value={theme} onChange={e => update(d => ({ ...d, settings: { ...d.settings, theme: e.target.value } }))}><option value="light">{tr("Light","लाइट")}</option><option value="dark">{tr("Dark","डार्क")}</option><option value="midnight">{tr("Midnight","मिडनाइट")}</option><option value="forest">{tr("Forest","फॉरेस्ट")}</option></select><small>{tr("Your choice is saved with your LevelUp account.","आपकी पसंद आपके LevelUp अकाउंट में सेव होगी।")}</small></label></div></section><section className="v3-panel"><div className="v3-panel-heading"><div><span className="v3-kicker">TELEGRAM</span><h3>{tr("Work notifications","काम की सूचनाएं")}</h3></div><Send size={18}/></div><p className="v3-muted">{tr("Generate a private linking code, then send the command to your LevelUp Telegram bot. Never share your bot token in the app or in chat.","एक निजी लिंक कोड बनाएं, फिर इसे अपने LevelUp Telegram bot को भेजें। Bot token किसी के साथ साझा न करें।")}</p><div className="v32-telegram-link"><code>{data.settings?.telegramLinkCode || tr("No linking code generated","अभी लिंक कोड नहीं बना है")}</code><button className="v3-primary" onClick={() => { const random = new Uint32Array(2); crypto.getRandomValues(random); const code = "LU" + Array.from(random, value => value.toString(36)).join("").slice(0,10).toUpperCase(); update(d => ({ ...d, settings: { ...d.settings, telegramLinkCode: code } })); }}>{tr("Generate linking code","लिंक कोड बनाएं")}</button></div>{data.settings?.telegramLinkCode && <p className="v3-muted">{tr("Send this exact message to your bot:","अपने bot को यह संदेश भेजें:")} <b>/start {data.settings.telegramLinkCode}</b></p>}<small className="v3-muted">{tr("Telegram delivery will activate after the secure Cloudflare Worker is configured with your bot token and Supabase service key.","Telegram notification चालू करने के लिए Cloudflare Worker में bot token और Supabase service key सुरक्षित रूप से सेट करनी होगी।")}</small></section></div>}
       {tab === "AI Coach" && <div className="v3-page v3-coach-page"><section className="v3-coach-intro"><div className="v3-coach-icon"><Bot size={26}/></div><div><span className="v3-kicker">YOUR PERSONAL EXECUTION COACH</span><h2>Think clearly. Choose the next step.</h2><p>Your coach can use your current tasks, goals, habits and focus history as context.</p></div></section><section className="v3-chat-panel"><div className="v3-chat-messages">{chat.map((m,i) => <div className={"v3-chat-message " + m.role} key={i}><span>{m.role === "assistant" ? <Bot size={15}/> : "You"}</span><div className="v3-chat-message-content"><FormattedAIText text={m.text} /></div></div>)}{chatBusy && <div className="v3-chat-message assistant"><span><Bot size={15}/></span><p>Thinking…</p></div>}<div ref={chatEnd}/></div><form className="v3-chat-composer" onSubmit={e => { e.preventDefault(); sendChat(); }}><button type="button" onClick={startVoice} title="Voice input"><Mic size={17}/></button><input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={voiceOn ? "Listening…" : "Ask about your goals, tasks or today's plan…"}/><button type="submit" disabled={!chatInput.trim() || chatBusy}><Send size={17}/></button></form><div className="v3-chat-suggestions">{["What should I focus on today?","Break my biggest goal into milestones","Review my unfinished tasks","Help me plan a realistic week"].map(s => <button key={s} onClick={() => sendChat(s)}>{s}</button>)}</div></section></div>}
       <footer className="v3-footer">LevelUp V3.2 <span>Plan with purpose. Execute with focus.</span></footer>
     </main>
