@@ -616,8 +616,9 @@ export default function LevelUpV3_2() {
 
   const nav = [
     ["Today", Target], ["Goals", Goal], ["Tasks", ListTodo], ["Calendar", CalendarDays], ["Habits", CheckCircle2],
-    ["Focus", Timer], ["Insights", BarChart3], ["Intelligence", Activity], ["AI Coach", Bot]
+    ["Focus", Timer], ["Insights", BarChart3], ["Life Areas", Heart], ["Intelligence", Activity], ["AI Coach", Bot], ["Settings", Settings]
   ];
+  const navLabel = name => language === "hi" ? ({ Today: "आज", Goals: "लक्ष्य", Tasks: "कार्य", Calendar: "कैलेंडर", Habits: "आदतें", Focus: "फोकस", Insights: "विश्लेषण", "Life Areas": "जीवन क्षेत्र", Intelligence: "इंटेलिजेंस", "AI Coach": "AI कोच", Settings: "सेटिंग्स" })[name] : name;
   return <div className="v3-app">
     <aside className="v3-sidebar">
       <div className="v3-brand"><span><Zap size={20} fill="currentColor"/></span><b>LevelUp</b><small>V3.2</small></div>
